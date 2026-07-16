@@ -6,10 +6,8 @@ module.exports = {
   '*.{ts,tsx}': (filenames) => {
     const lintable = filenames.filter((f) => !f.includes('/functions/'));
     if (lintable.length === 0) return [];
-    return [
-      `eslint --fix --max-warnings 0 ${lintable.join(' ')}`,
-      `prettier --write ${lintable.join(' ')}`,
-    ];
+    const quoted = lintable.map((f) => `"${f}"`).join(' ');
+    return [`eslint --fix --max-warnings 0 ${quoted}`, `prettier --write ${quoted}`];
   },
   '*.{js,json,md}': ['prettier --write'],
 };
