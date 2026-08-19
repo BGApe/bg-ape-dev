@@ -1,17 +1,15 @@
 # BG Ape — Version 5 Handover
 
-Consolidated snapshot of the v5 work stream. Companion to the living log in
-`version5-inprogress.md`; supersedes it as the definitive v5 reference.
+Consolidated snapshot of the v5 work stream. Supersedes `version5-inprogress.md`.
 
-Last updated: 2026-08-18
+Last updated: 2026-08-19
 
 ---
 
 ## 1. Product direction
 
 BG Ape is evolving from "a chat app" into a **board-game companion** where chat is
-one supporting tool among many, surfaced contextually throughout the app (e.g. a
-"quick setup" button on a game, or "help me pick a game for tonight" on Home).
+one supporting tool among many, surfaced contextually throughout the app.
 
 Information architecture (current):
 
@@ -41,98 +39,161 @@ Bottom tabs: 🏠 Home · 💬 Chat · 🎲 Collection · 👤 Account.
   message hooks operate on a passed-in `ChatThread`.
 - UI: Chat tab is master-detail (`ConversationList` ↔ `Conversation`);
   `NewConversationSheet` (reason + optional game, auto-title). Android back pops.
-- Rules: covered by `users/{uid}/{document=**}`; orphaned `chatThreads` block
-  removed and rules **deployed**.
 
-### 2.2 Home / Stats / Account / Nav (Batch 1)
+### 2.2 Home / Stats / Account / Nav
 
-- **Home** (`app/(app)/index.tsx`, default tab): welcome, "Ask BG Ape anything"
-  (starts a `general` chat), "I want…" list (recommendation/setup/rules → create a
-  labelled conversation and jump to Chat), activity card (→ Stats), "+ Log a play"
-  (→ Plays), top-games preview (→ Collection).
-- **Cross-tab chat nav:** `src/store/chatUiStore.ts` holds `activeThreadId`; Home
-  sets it then navigates to Chat.
-- **Stats** (`app/(app)/stats.tsx`): Plays/Group-size + Day/Week/Month toggles +
-  bar chart. **Currently empty state — not yet wired to real data.**
-- **Chart:** `src/components/BarChart.tsx` — dependency-free (plain Views).
-- **Account:** gaming nickname (`gamingNick`) + Integrations placeholder
-  (BG Stats, BGG, Messenger, Gmail — "Coming soon").
+- **Home** (`app/(app)/index.tsx`): welcome, AskBar, "I want…" list
+  (recommendation/setup/rules → intent screen → chat), activity card (→ Stats),
+  "+ Log a play" (→ Plays), top-games preview (→ Collection). Real play data wired.
+- **Stats** (`app/(app)/stats.tsx`): real play aggregation across Day/Week/Month
+  - Plays/Group-size metrics. Summary cards (total plays, this month, avg players,
+    most played). Bar chart taps to Stats.
+- **Account:** gaming nickname (`gamingNick`) + Integrations placeholder.
+- **AskBar** (`src/components/AskBar.tsx`): persistent shortcut at top of every
+  main screen; taps to `/(app)/intent?reason=general`.
 
-### 2.3 Plays data model (simplified logging + list)
+### 2.3 Plays data model
 
-- Storage `users/{uid}/plays/{playId}` (covered by existing user rule).
-- Fields: `gameName` (+ optional `gameId`), `playedAt`, optional `location`,
+- Storage `users/{uid}/plays/{playId}`.
+- Fields: `gameName` (+optional `gameId`), `playedAt`, optional `location`,
   `playerCount`, `durationMinutes`, `note`. Game + date required.
-- `PlaysRepository` (`list/add/update/remove`) + Firestore impl; `PlayId` brand.
-- Hooks: `usePlays`, `useLogPlay`, `useUpdatePlay` (optimistic), `useDeletePlay`.
-- UI: hidden **Plays** route from Home. `LogPlaySheet` (game picker from
-  collection + free-text; Today/Yesterday + manual `YYYY-MM-DD`; location, players,
-  duration, note). `PlayRow` with **inline-editable note** (saves on blur);
-  long-press to delete.
+- `PlaysRepository` + Firestore impl; Hooks: `usePlays`, `useLogPlay`,
+  `useUpdatePlay` (optimistic), `useDeletePlay`.
+- UI: `LogPlaySheet` (game picker from collection + free-text; Today/Yesterday +
+  manual date; location, players, duration, note). `PlayRow` with inline-editable
+  note (saves on blur); long-press to delete.
 
-### 2.4 BGG whisperer + collection detail
+### 2.4 BGG integration
 
 - **Dependency:** `fast-xml-parser` (pure JS, no native rebuild).
-- **BGG client** (`src/services/bgg/`): `bggClient.search(query)` +
-  `bggClient.getThing(bggId)` against the public XML API2 (no key); `202`/`429`
-  retry+backoff; parses name/year/players/time/thumbnail/image/weight/rating/rank.
-  Client-side. Reusable by the future scanner. **Kept behind the client boundary —
-  returns domain types only, never leaks parser types.**
-- **Hooks:** `useBggSearch` (debounced by caller, cached), `useBggThing`,
-  `useUpdateGame` (optimistic notes). Query keys `bgg.search/thing`.
-- **Enriched `CollectionGame`:** `playingTime`, `averageWeight`, `bggRating`,
-  `bggRank`, `notes`, plus `'bgg'` source; repo gained `update()`.
-- **Add flow** (`AddGameSheet`): debounced BGG search → pick result (fetches +
-  stores full details, `source: 'bgg'`); free-text "Add manually" fallback.
-- **Collection list:** thumbnail + year/players + stats line (plays count joined
-  from plays by `gameId`, owned-since, BGG rank); row → detail.
-- **Game detail** (`app/(app)/game.tsx`, hidden, `?id=`): image, advanced stats
-  grid (stored + live `useBggThing` fallback), your play count, editable notes
-  (blur-save), remove.
+- **BGG client** (`src/services/bgg/BggClient.ts`):
+  - `search(query)`, `getThing(bggId)`, `getThings(bggIds[])` (batch, max 20).
+  - **Rate-limiting:** single serial promise queue, 1.5 s min gap between calls;
+    exponential backoff (2 s base, doubles per attempt) + `Retry-After` header.
+  - **Auth header:** `Authorization: Bearer <token>` — see §6 below.
+  - Parses: name/year/players/time/thumbnail/image/weight/rating/rank +
+    **categories** + **mechanics** (from `<link>` nodes).
+- **Enriched `CollectionGame`:** all BGG fields stored on add including
+  `categories[]` and `mechanics[]`.
+- **Add flow** (`AddGameSheet`): debounced search → pick → full details fetched
+  and stored (`source: 'bgg'`); free-text fallback.
+- **Collection list** (`app/(app)/collection.tsx`): thumbnail + year/players +
+  stats. **BGG badge row** (⚖ weight colour-coded, ★ rating, top mechanic chip)
+  for `source: 'bgg'` games.
+- **Game detail** (`app/(app)/game.tsx`): image, stats grid, **Categories &
+  Mechanics chips** (indigo = category, green = mechanic), editable notes,
+  **Play history** (chronological list: date · players · duration · location ·
+  italic note).
+- **`BggGameInput`** component: live autocomplete dropdown used in intent filter
+  panels (QuickSetup, RulesHelper).
+
+### 2.5 Intent screens + chat intelligence
+
+- **Intent screen** (`app/(app)/intent.tsx`): "I want to…" hub rendering
+  `GamePickerFilters`, `QuickSetupFilters`, or `RulesFilters` based on `reason`
+  param. Builds a prompt preview (editable), creates thread, auto-sends first
+  message via `chatUiStore.pendingMessage`.
+- **Filter components** (`src/features/chat/components/intent/`):
+  - `GamePickerFilters`: fromCollection toggle, players chips, complexity, play
+    time, category/mechanics multi-select, table-size chips, freetext notes.
+  - `QuickSetupFilters` + `RulesFilters`: fromCollection toggle + `CollectionPicker`
+    or `BggGameInput`, depth/topic chips.
+- **Clarifying questions** (mock, ready for real LLM):
+  - `AssistantRequest` carries `threadReason` + `isFirstMessage`.
+  - Game Picker: asks 2 questions **only** when first message has no filter signals
+    (players/complexity/time/collection keywords). Pre-filled filters → skip
+    straight to recommendations.
+  - Quick Setup + Rules Helper: always ask one targeted question on first message.
+  - `hasFilterSignals(text)` in `MockAssistantProvider` detects the filter context.
+- **GameContextCard** (`src/features/chat/components/GameContextCard.tsx`):
+  shown as FlashList header in Conversation when `thread.gameName` is set;
+  thumbnail + year + player/time/weight/rating chips + top 2 mechanics, sourced
+  from local collection cache (no extra API call).
+
+### 2.6 Shared UI components
+
+| Component          | Location                               | Used by                                      |
+| ------------------ | -------------------------------------- | -------------------------------------------- |
+| `AskBar`           | `src/components/AskBar.tsx`            | Home, Collection, Stats, Account             |
+| `BarChart`         | `src/components/BarChart.tsx`          | Home, Stats                                  |
+| `MetaChip`         | `src/components/MetaChip.tsx`          | Collection row, Game detail, GameContextCard |
+| `CollectionPicker` | `src/features/chat/components/intent/` | QuickSetup, Rules filters                    |
+| `BggGameInput`     | `src/features/chat/components/intent/` | QuickSetup, Rules filters                    |
 
 ---
 
-## 3. Roadmap (not done)
+## 3. BGG API key — REQUIRED ACTION ⚠️
 
-### Next up — wire real data
+BGG added mandatory Bearer token auth to XML API2 in 2025. All requests without
+a token return **401**.
 
-- Aggregate `plays` into the **Home activity card**, **Stats charts**, and
-  **top-played ranking** (plays model + collection are ready; collection list
-  already uses play counts).
+### What you need to do
 
-### Chat intelligence
+1. Register the app at **https://boardgamegeek.com/applications** (takes 1–2 weeks
+   for BGG to approve).
+2. Once approved, click **Tokens** next to your application and generate a token.
+3. BGG strongly recommends making requests **server-side** (token must not be
+   exposed in the mobile bundle).
 
-- **Clarifying questions:** each scenario asks 1–3 questions before answering
-  (recommendation → players / length / weight). Mock-driven now, real LLM later.
+### Planned architecture (Cloud Function proxy)
+
+```
+App → Firebase Cloud Function → BGG API (token in Secret Manager)
+```
+
+- `BggClient.ts` will point to the Cloud Function URL instead of `boardgamegeek.com`.
+- The XML parsing + domain mapping code stays as-is; only the `fetchXml` base URL
+  changes.
+- Cloud Function caches responses (e.g. 1 h for `/thing`, 10 min for `/search`).
+
+**Until the token is in place, BGG search/add returns empty results.** Any games
+already in Firestore (added before the auth change) continue to work normally.
+
+---
+
+## 4. Roadmap (not yet done)
+
+### Immediate (waiting on BGG token)
+
+- Build Cloud Function proxy + wire `BggClient` to it.
+- Store BGG token in Firebase Secret Manager.
+
+### Chat / LLM
+
+- Replace `MockAssistantProvider` with a real LLM (OpenAI / Gemini) behind a
+  Cloud Function. The `AssistantRequest` + `threadReason` + `isFirstMessage`
+  plumbing is already in place.
+
+### Collection enhancements (backlog)
+
+- **B** ✅ — inline BGG metadata badges on collection cards (done)
+- **C** ✅ — category/mechanic enrichment on add (done)
+- **D** ✅ — game detail: categories/mechanics chips + play history (done)
+- **E** ✅ — chat GameContextCard (done)
 
 ### Integrations (future / OAuth)
 
-- BG Stats + other databases; Messenger / WhatsApp / Gmail / Outlook sync
-  (enables a **game-night planner**); local board-game café sync.
+- BG Stats sync; Messenger / WhatsApp / Gmail / Outlook (game-night planner);
+  local board-game café sync.
 
 ### Scanner (premium)
 
-- OCR board-game boxes via Google Cloud Vision (Cloud Function, server-side key) +
-  BGG lookup (reuse `bggClient`); premium flag/gating; image capture + review UI;
-  app.config plugin + prebuild.
+- OCR boxes via Google Cloud Vision + BGG lookup (reuse BggClient); premium gating.
 
-### Hardening / tech-debt
+### Tech debt
 
-- **Add fixture-based BGG parser tests** (sample XML → asserted domain objects) —
-  cheap, guards against BGG shape changes and `fast-xml-parser` upgrades.
-- **BGG proxy at scale:** move BGG calls to a Cloud Function (cache + rate-limit +
-  return JSON). `bggClient`'s interface stays the same and the client-side XML
-  parser could then be dropped from the app entirely.
+- Fixture-based BGG parser tests (sample XML → asserted domain objects).
+- Migrate all React Native Firebase namespaced API calls to modular API
+  (currently just WARN, not breaking).
 
 ---
 
-## 4. Architecture notes
+## 5. Architecture notes
 
-- **Repository pattern** everywhere (chat, collection, plays, profile): an
-  interface + Firestore impl (+ in-memory for chat), consumed only via hooks.
+- **Repository pattern** everywhere: interface + Firestore impl (+in-memory for
+  chat), consumed only via hooks.
 - **exactOptionalPropertyTypes is on.** Build objects with optional fields from
-  looser sources via an intermediate "raw" type (`field?: T | undefined`) +
-  incremental assignment (see `toThread`, `toGame`, `toPlay`, `toNewGame`).
+  looser sources via incremental assignment (see `toThread`, `toGame`, `toPlay`).
 - **Firestore rejects `undefined`** — repos use a `compact()` helper before writes.
 - **Copy** lives in `src/constants/copy.ts`; **query keys** in
   `src/constants/queryKeys.ts`; **routes** in `src/constants/routes.ts`.
@@ -140,64 +201,56 @@ Bottom tabs: 🏠 Home · 💬 Chat · 🎲 Collection · 👤 Account.
 
 ---
 
-## 5. Running on a physical device over Wi-Fi (no cable)
+## 6. Running on a physical device over Wi-Fi
 
-USB was unreliable (charge-only cable). Use **Android 11+ Wireless debugging**.
-Device: Galaxy S24 (SM-S921B), app id `com.v1.boardgameapp.dev`, scheme `bgape`.
-adb at `~/Library/Android/sdk/platform-tools/adb`.
+Device: Galaxy S24 (SM-S921B), package `com.v1.boardgameapp.dev`, scheme `bgape`.
+adb: `~/Library/Android/sdk/platform-tools/adb`.
 
 One-time pairing:
 
-1. Phone: Settings → Developer options → Wireless debugging → ON.
-2. "Pair device with pairing code" → note the pairing `IP:port` + 6-digit code.
-3. `adb pair <IP>:<pairPort> <code>`.
+```bash
+adb pair <IP>:<pairPort> <code>
+```
 
-Each session (ports rotate; phone drops on sleep — `adb mdns services` rediscovers):
+Each session (ports rotate after sleep):
 
 ```bash
 export PATH="$HOME/Library/Android/sdk/platform-tools:$PATH"
-adb connect <IP>:<connectPort>
 adb reverse tcp:8081 tcp:8081
-pnpm start
+pnpm start -- --clear
+adb shell am force-stop com.v1.boardgameapp.dev
 adb shell am start -a android.intent.action.VIEW \
   -d "bgape://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
 ```
 
-**"Could not connect to localhost:8081"** ⇒ the `adb reverse` mapping is missing
-(common after a Metro restart) — re-run `adb reverse tcp:8081 tcp:8081` and reload.
+**Metro crashes with exit code 7** (uv_interface_addresses) in the Cursor sandbox
+— always start Metro with `required_permissions: ["all"]`.
 
 ---
 
-## 6. Gotchas
+## 7. Gotchas
 
 - **expo-router typed routes** generate into `.expo/types/router.d.ts` on Metro
-  boot/bundling. This sandbox's file watcher doesn't emit, so new route files may
-  not appear until Metro is restarted → if `tsc` says "route not assignable",
-  restart Metro.
-- **`href: null`** hides a tab from the bar but strips it from typed routes — use
-  `tabBarItemStyle: { display: 'none' }` instead (see Stats/Plays/Game routes).
+  boot. New route files may not appear until Metro restarts.
+- **`href: null`** hides a tab but strips typed routes — use
+  `tabBarItemStyle: { display: 'none' }` instead.
 - **`react-hook-form` pinned to 7.74.0** (7.76 broke TextInput typing on RN).
 - **Crashlytics Gradle edits are wiped by `expo prebuild`** — re-add the
-  `firebase-crashlytics-gradle` classpath (`android/build.gradle`) and
-  `apply plugin: 'com.google.firebase.crashlytics'` (`android/app/build.gradle`).
-- **pnpm store:** installs must use the global store
-  (`--store-dir /Users/macj/Library/pnpm/store/v11`) to match the current
-  `node_modules`; the project-local `.pnpm-store` is git-ignored and should not be
-  used (it caused the earlier repo bloat).
+  `firebase-crashlytics-gradle` classpath after each prebuild.
+- **pnpm store:** use `--store-dir /Users/macj/Library/pnpm/store/v11`.
 
 ---
 
-## 7. Git status
+## 8. Commits this session (2026-08-19)
 
-- All v5 work (multiple conversations, collection, Batch 1, plays, BGG whisperer)
-  is **uncommitted** on top of `7a4a7de "Add full BG Ape app source: Phases 1-4
-complete"`. A commit checkpoint is recommended.
-- Remote: `bg-ape-dev` (GitHub), SSH via `~/.ssh/id_ed25519_github` (passphrase-less
-  key added because the original passphrase was unknown).
+| Hash      | Description                                                                  |
+| --------- | ---------------------------------------------------------------------------- |
+| `b4509af` | feat(chat): context-aware clarifying questions per thread reason             |
+| `a414c25` | feat(bgg): throttle client, parse categories/mechanics on add                |
+| `e45bbc5` | feat(bgg): inline metadata badges, game detail enrichment, chat context card |
+| `c9f250c` | fix(bgg): add User-Agent header + fast-fail on 401/403                       |
 
----
-
-## 8. Gate checklist (run before every commit)
+## 9. Gate checklist
 
 ```bash
 pnpm typecheck   # tsc --noEmit
