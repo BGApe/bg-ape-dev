@@ -118,7 +118,9 @@ export default function CollectionScreen(): React.JSX.Element {
   }
 
   return (
-    <View className="flex-1 bg-[#0F0F0F]" style={{ paddingTop: insets.top + 8 }}>
+    <View className="flex-1 bg-[#0F0F0F]" style={{ paddingTop: insets.top + 4 }}>
+      <AskBar />
+
       <View className="flex-row items-center justify-between px-6 pb-3">
         <View>
           <Text className="text-2xl font-bold text-[#F9F9F9]">{Copy.collection.title}</Text>
@@ -137,8 +139,6 @@ export default function CollectionScreen(): React.JSX.Element {
           <Text className="text-xl font-semibold text-white">+</Text>
         </TouchableOpacity>
       </View>
-
-      <AskBar />
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

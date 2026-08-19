@@ -43,7 +43,9 @@ export default function PlaysScreen(): React.JSX.Element {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0F0F0F', paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: '#0F0F0F', paddingTop: insets.top + 4 }}>
+      <AskBar />
+
       <View className="flex-row items-center gap-2 px-3 pb-2 pt-1">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -62,8 +64,6 @@ export default function PlaysScreen(): React.JSX.Element {
           <Text className="text-sm font-semibold text-white">{Copy.plays.logButton}</Text>
         </TouchableOpacity>
       </View>
-
-      <AskBar />
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

@@ -62,10 +62,10 @@ export default function AccountScreen(): React.JSX.Element {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: '#0F0F0F' }}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: insets.bottom + 32 }}
     >
-      <Text className="mb-4 px-6 text-2xl font-bold text-[#F9F9F9]">{Copy.account.title}</Text>
       <AskBar />
+      <Text className="mb-4 px-6 text-2xl font-bold text-[#F9F9F9]">{Copy.account.title}</Text>
       <View className="px-6">
         <View className="mb-4">
           <Text className="mb-2 text-sm font-medium text-neutral-400">

@@ -74,7 +74,9 @@ export default function StatsScreen(): React.JSX.Element {
   const hasData = data.some((d) => d.value > 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0F0F0F', paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: '#0F0F0F', paddingTop: insets.top + 4 }}>
+      <AskBar />
+
       <View className="flex-row items-center gap-2 px-3 pb-2 pt-1">
         <TouchableOpacity
           onPress={() => router.back()}
@@ -86,8 +88,6 @@ export default function StatsScreen(): React.JSX.Element {
         </TouchableOpacity>
         <Text className="text-lg font-bold text-[#F9F9F9]">{Copy.stats.title}</Text>
       </View>
-
-      <AskBar />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16 }}>
         <View className="mb-3">
           <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
