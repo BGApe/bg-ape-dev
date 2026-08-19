@@ -37,6 +37,10 @@ function toNewGame(result: BggSearchResult, thing: BggThing | null): NewCollecti
   if (thing?.averageWeight !== undefined) game.averageWeight = thing.averageWeight;
   if (thing?.bggRating !== undefined) game.bggRating = thing.bggRating;
   if (thing?.bggRank !== undefined) game.bggRank = thing.bggRank;
+  if (thing?.categories !== undefined && thing.categories.length > 0)
+    game.categories = thing.categories;
+  if (thing?.mechanics !== undefined && thing.mechanics.length > 0)
+    game.mechanics = thing.mechanics;
 
   return game;
 }

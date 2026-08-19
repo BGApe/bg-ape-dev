@@ -22,4 +22,8 @@ export type BggThing = {
   /** Overall BoardGameGeek rank (lower is better); undefined if unranked. */
   bggRank?: number;
   description?: string;
+  /** BGG boardgamecategory labels, e.g. ["Fantasy", "Fighting"]. */
+  categories?: string[];
+  /** BGG boardgamemechanic labels, e.g. ["Deck Building", "Co-operative Play"]. */
+  mechanics?: string[];
 };

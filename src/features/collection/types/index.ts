@@ -30,6 +30,10 @@ export type CollectionGame = {
   bggRank?: number;
   /** User's custom notes about the game (editable on the detail screen). */
   notes?: string;
+  /** BGG category labels, e.g. ["Fantasy", "Fighting"]. */
+  categories?: string[];
+  /** BGG mechanic labels, e.g. ["Deck Building", "Co-operative Play"]. */
+  mechanics?: string[];
 };
 
 /** Fields a caller provides when adding a game; id/addedAt are assigned by the repo. */

@@ -17,6 +17,8 @@ export const CollectionGameSchema = z.object({
   bggRating: z.number().optional(),
   bggRank: z.number().optional(),
   notes: z.string().optional(),
+  categories: z.array(z.string()).optional(),
+  mechanics: z.array(z.string()).optional(),
 });
 
 /** Validates manual add-game input from the UI. */
