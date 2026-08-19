@@ -22,6 +22,10 @@ export function useSendMessage(thread: ChatThread | null) {
       if (!thread) throw new Error('No active thread.');
       const uid = thread.userId;
 
+      const existingMessages =
+        queryClient.getQueryData<ChatMessage[]>(QueryKeys.chat.messages(thread.id)) ?? [];
+      const isFirstMessage = existingMessages.filter((m) => m.role === 'user').length === 0;
+
       const optimisticMessage: ChatMessage = {
         id: `optimistic-${Date.now()}` as MessageId,
         threadId: thread.id,
@@ -54,6 +58,8 @@ export function useSendMessage(thread: ChatThread | null) {
         mockAssistantProvider,
         chatRepository,
         { appendStreamChunk, clearStream },
+        thread.reason,
+        isFirstMessage,
       );
 
       queryClient.setQueryData<ChatMessage[]>(QueryKeys.chat.messages(thread.id), (prev) => [

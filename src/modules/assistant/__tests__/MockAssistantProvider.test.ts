@@ -7,11 +7,15 @@ const provider = new MockAssistantProvider();
 const recommendationRequest: AssistantRequest = {
   text: 'Recommend me a game',
   intent: 'recommendation',
+  threadReason: 'recommendation',
+  isFirstMessage: false,
 };
 
 const quickGuideRequest: AssistantRequest = {
   text: 'How do I play Wingspan?',
   intent: 'quick_guide',
+  threadReason: 'setup',
+  isFirstMessage: false,
 };
 
 describe('MockAssistantProvider.complete()', () => {

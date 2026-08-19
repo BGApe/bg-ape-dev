@@ -4,7 +4,7 @@ import type { ThreadId, UserId } from '@/types';
 
 import type { ChatRepository } from '../api/ChatRepository';
 import { assistantResponseToChatMessages } from '../mappers/assistantResponseMapper';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, ChatReason } from '../types';
 
 import { resolveIntent } from './intentResolver';
 
@@ -25,17 +25,19 @@ export async function runAssistantTurn(
   provider: AssistantProvider,
   repo: ChatRepository,
   composer: ComposerActions,
+  threadReason: ChatReason = 'general',
+  isFirstMessage: boolean = false,
 ): Promise<ChatMessage[]> {
   const intent = resolveIntent(text);
 
-  for await (const chunk of provider.stream({ text, intent })) {
+  for await (const chunk of provider.stream({ text, intent, threadReason, isFirstMessage })) {
     composer.appendStreamChunk(chunk.delta);
     if (chunk.done) break;
   }
 
   composer.clearStream();
 
-  const response = await provider.complete({ text, intent });
+  const response = await provider.complete({ text, intent, threadReason, isFirstMessage });
   const messages = assistantResponseToChatMessages(response, threadId);
 
   const persisted: ChatMessage[] = [];
