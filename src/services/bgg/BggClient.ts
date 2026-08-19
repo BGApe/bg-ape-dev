@@ -118,11 +118,22 @@ function extractLinks(item: XmlNode, type: string): string[] {
 // ─── Core fetch ──────────────────────────────────────────────────────────────
 
 /**
+ * BGG / Cloudflare requires a descriptive User-Agent so requests are not
+ * treated as anonymous bots. BGG's own Terms of Use ask you to identify
+ * your application here.
+ */
+const BGG_HEADERS = {
+  'User-Agent': 'BGApe/1.0 (board-game companion app; https://bgape.dev)',
+  Accept: 'application/xml, text/xml, */*',
+};
+
+/**
  * Fetches XML from BGG through the shared rate-limit queue.
  *
  * - 200 → return body text
  * - 202 → BGG is building the response; retry with short backoff (collection
  *         endpoint only, but we handle it everywhere for robustness)
+ * - 401 / 403 → auth / Cloudflare challenge — log and return null
  * - 429 / 503 → rate-limited or busy; exponential backoff honouring Retry-After
  * - anything else → log and return null
  */
@@ -131,7 +142,7 @@ async function fetchXml(url: string): Promise<string | null> {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       let res: Response;
       try {
-        res = await fetch(url);
+        res = await fetch(url, { headers: BGG_HEADERS });
       } catch (err) {
         logger.warn('[BGG] Network error', { url, attempt, err });
         await backoffDelay(attempt);
@@ -139,6 +150,14 @@ async function fetchXml(url: string): Promise<string | null> {
       }
 
       if (res.status === 200) return res.text();
+
+      if (res.status === 401 || res.status === 403) {
+        logger.warn('[BGG] Auth/Cloudflare block — check User-Agent or API key', {
+          url,
+          status: res.status,
+        });
+        return null; // no point retrying an auth failure
+      }
 
       if (res.status === 202) {
         // Response queued — BGG asks us to poll; 2 s is the safe minimum.
