@@ -18,8 +18,8 @@ const appConfig = {
 
   chat: {
     pageSize: 30,
-    /** Set to true in Phase 2 when FirestoreChatRepository is wired. */
-    persistMessages: false,
+    /** FirestoreChatRepository is wired — messages persist across restarts. */
+    persistMessages: true,
   },
 
   profile: {

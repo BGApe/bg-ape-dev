@@ -1,30 +1,26 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { QueryKeys } from '@/constants/queryKeys';
-import { useAuthSession } from '@/features/auth/hooks/useAuthSession';
 import { mapError } from '@/lib/mapError';
 import { mockAssistantProvider } from '@/modules/assistant/MockAssistantProvider';
 import { firebaseAnalytics } from '@/services/analytics';
 import { logger } from '@/services/logger';
 import { useComposerStore } from '@/store/composerStore';
-import type { MessageId, ThreadId } from '@/types';
+import type { MessageId } from '@/types';
 
-import { inMemoryChatRepository } from '../api/InMemoryChatRepository';
+import { chatRepository } from '../api/activeChatRepository';
 import { runAssistantTurn } from '../services/assistantOrchestrator';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, ChatThread } from '../types';
 
-import { useChatThread } from './useChatThread';
-
-export function useSendMessage() {
+export function useSendMessage(thread: ChatThread | null) {
   const queryClient = useQueryClient();
-  const { user } = useAuthSession();
-  const { thread } = useChatThread();
   const appendStreamChunk = useComposerStore((s) => s.appendStreamChunk);
   const clearStream = useComposerStore((s) => s.clearStream);
 
   return useMutation({
     mutationFn: async (text: string) => {
-      if (!user || !thread) throw new Error('Not authenticated or no active thread.');
+      if (!thread) throw new Error('No active thread.');
+      const uid = thread.userId;
 
       const optimisticMessage: ChatMessage = {
         id: `optimistic-${Date.now()}` as MessageId,
@@ -40,7 +36,7 @@ export function useSendMessage() {
         optimisticMessage,
       ]);
 
-      const userMessage = await inMemoryChatRepository.addMessage(thread.id, {
+      const userMessage = await chatRepository.addMessage(uid, thread.id, {
         threadId: thread.id,
         role: 'user',
         content: text,
@@ -53,10 +49,10 @@ export function useSendMessage() {
 
       const assistantMessages = await runAssistantTurn(
         text,
-        thread.id as ThreadId,
-        user.uid,
+        thread.id,
+        uid,
         mockAssistantProvider,
-        inMemoryChatRepository,
+        chatRepository,
         { appendStreamChunk, clearStream },
       );
 
@@ -65,6 +61,7 @@ export function useSendMessage() {
         ...assistantMessages,
       ]);
 
+      void queryClient.invalidateQueries({ queryKey: QueryKeys.chat.threads(uid) });
       firebaseAnalytics.track('message_sent', { intent: 'unknown' });
 
       return assistantMessages;

@@ -40,7 +40,7 @@ export async function runAssistantTurn(
 
   const persisted: ChatMessage[] = [];
   for (const msg of messages) {
-    const saved = await repo.addMessage(threadId, {
+    const saved = await repo.addMessage(uid, threadId, {
       threadId: msg.threadId,
       role: msg.role,
       content: msg.content,

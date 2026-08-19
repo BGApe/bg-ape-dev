@@ -12,6 +12,20 @@ export const QueryKeys = {
   chat: {
     all: ['chat'] as const,
     threads: (uid: string) => ['chat', 'threads', uid] as const,
+    thread: (threadId: string) => ['chat', 'thread', threadId] as const,
     messages: (threadId: string) => ['chat', 'messages', threadId] as const,
+  },
+  collection: {
+    all: ['collection'] as const,
+    list: (uid: string) => ['collection', 'list', uid] as const,
+  },
+  plays: {
+    all: ['plays'] as const,
+    list: (uid: string) => ['plays', 'list', uid] as const,
+  },
+  bgg: {
+    all: ['bgg'] as const,
+    search: (query: string) => ['bgg', 'search', query] as const,
+    thing: (bggId: number) => ['bgg', 'thing', bggId] as const,
   },
 } as const;

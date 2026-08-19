@@ -4,7 +4,13 @@
  */
 export const Routes = {
   login: '/(public)/login',
-  chat: '/(app)',
+  home: '/(app)',
+  chat: '/(app)/chat',
+  collection: '/(app)/collection',
+  stats: '/(app)/stats',
+  plays: '/(app)/plays',
+  game: '/(app)/game',
+  intent: '/(app)/intent',
   account: '/(app)/account',
 } as const;
 

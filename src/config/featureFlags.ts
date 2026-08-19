@@ -12,7 +12,7 @@ export type FeatureFlagConfig = {
     enableStreaming: boolean;
   };
   chat: {
-    /** Persist messages to Firestore. Default: false (InMemoryChatRepository). */
+    /** Persist messages to Firestore (FirestoreChatRepository) vs in-memory. */
     persistMessages: boolean;
   };
   debug: {
@@ -27,7 +27,7 @@ export const defaultFeatureFlags: FeatureFlagConfig = {
     enableStreaming: false,
   },
   chat: {
-    persistMessages: false,
+    persistMessages: true,
   },
   debug: {
     showNetworkLog: false,

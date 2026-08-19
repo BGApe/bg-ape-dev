@@ -17,3 +17,5 @@ export type Brand<T, B> = T & { readonly __brand: B };
 export type UserId = Brand<string, 'UserId'>;
 export type ThreadId = Brand<string, 'ThreadId'>;
 export type MessageId = Brand<string, 'MessageId'>;
+export type GameId = Brand<string, 'GameId'>;
+export type PlayId = Brand<string, 'PlayId'>;

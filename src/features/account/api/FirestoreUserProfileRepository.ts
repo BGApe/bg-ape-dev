@@ -12,7 +12,7 @@ const COLLECTION = 'users';
 export const firestoreUserProfileRepository: UserProfileRepository = {
   async get(uid: UserId): Promise<UserProfile | null> {
     const snap = await firestore().collection(COLLECTION).doc(uid).get();
-    if (!snap.exists) return null;
+    if (!snap.exists()) return null;
 
     const raw = snap.data();
     const parsed = UserProfileSchema.safeParse({ ...raw, uid });

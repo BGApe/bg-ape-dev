@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { QueryKeys } from '@/constants/queryKeys';
 
-import { inMemoryChatRepository } from '../api/InMemoryChatRepository';
+import { chatRepository } from '../api/activeChatRepository';
 import type { ChatThread } from '../types';
 
 export function useChatMessages(thread: ChatThread | null) {
@@ -10,7 +10,7 @@ export function useChatMessages(thread: ChatThread | null) {
     queryKey: thread ? QueryKeys.chat.messages(thread.id) : QueryKeys.chat.messages('none'),
     queryFn: () => {
       if (!thread) return [];
-      return inMemoryChatRepository.getMessages(thread.id);
+      return chatRepository.getMessages(thread.userId, thread.id);
     },
     enabled: thread !== null,
   });
