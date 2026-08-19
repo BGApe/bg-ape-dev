@@ -96,6 +96,9 @@ export const Copy = {
     ratingValue: (n: number) => `${n.toFixed(1)} / 10`,
     notFound: 'Game not found.',
     dash: '—',
+    categoriesTitle: 'Categories & Mechanics',
+    playsHistoryTitle: 'Play history',
+    noPlaysYet: 'No plays recorded yet.',
   },
   tabs: {
     home: 'Home',

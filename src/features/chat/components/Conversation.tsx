@@ -5,6 +5,7 @@ import { Alert, KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Copy } from '@/constants/copy';
+import { useCollection } from '@/features/collection/hooks/useCollection';
 import { mapError } from '@/lib/mapError';
 import { useChatUiStore } from '@/store/chatUiStore';
 import { useComposerStore } from '@/store/composerStore';
@@ -17,6 +18,7 @@ import { REASON_EMOJI } from '../reasons';
 import type { ChatMessage, ChatThread } from '../types';
 
 import { Composer } from './Composer';
+import { GameContextCard } from './GameContextCard';
 import { MessageBubble } from './MessageBubble';
 
 type Props = {
@@ -35,6 +37,13 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   const streamingContent = useComposerStore((s) => s.streamingContent);
   const pendingMessage = useChatUiStore((s) => s.pendingMessage);
   const setPendingMessage = useChatUiStore((s) => s.setPendingMessage);
+  const { data: collectionGames = [] } = useCollection();
+  const contextGame =
+    thread.gameId !== undefined
+      ? collectionGames.find((g) => g.id === thread.gameId)
+      : thread.gameName !== undefined
+        ? collectionGames.find((g) => g.name.toLowerCase() === thread.gameName?.toLowerCase())
+        : undefined;
 
   /** Auto-send any message queued by the intent screen. */
   useEffect(() => {
@@ -174,6 +183,11 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
             renderItem={({ item }) => (
               <MessageBubble message={item} onLongPress={handleDeleteMessage} />
             )}
+            ListHeaderComponent={
+              thread.gameName !== undefined ? (
+                <GameContextCard gameName={thread.gameName} game={contextGame} />
+              ) : null
+            }
             contentContainerStyle={{ paddingVertical: 12 }}
             keyboardShouldPersistTaps="handled"
           />

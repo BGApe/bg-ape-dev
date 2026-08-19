@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert, Image, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MetaChip } from '@/components/MetaChip';
 import { Copy } from '@/constants/copy';
 import { useBggThing } from '@/features/collection/hooks/useBggThing';
 import { useCollection } from '@/features/collection/hooks/useCollection';
@@ -50,7 +51,10 @@ export default function GameDetailScreen(): React.JSX.Element {
     );
   }
 
-  const playCount = plays.filter((p) => p.gameId === game.id).length;
+  const gamePlays = plays
+    .filter((p) => p.gameId === game.id)
+    .sort((a, b) => b.playedAt - a.playedAt);
+  const playCount = gamePlays.length;
 
   const minPlayers = game.minPlayers ?? thing?.minPlayers;
   const maxPlayers = game.maxPlayers ?? thing?.maxPlayers;
@@ -150,6 +154,23 @@ export default function GameDetailScreen(): React.JSX.Element {
           <StatCell label={Copy.gameDetail.playsLabel} value={String(playCount)} />
         </View>
 
+        {/* Categories & Mechanics */}
+        {((game.categories?.length ?? 0) > 0 || (game.mechanics?.length ?? 0) > 0) && (
+          <>
+            <Text className="mb-2 mt-6 text-base font-semibold text-[#F9F9F9]">
+              {Copy.gameDetail.categoriesTitle}
+            </Text>
+            <View className="flex-row flex-wrap rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
+              {game.categories?.map((c) => (
+                <MetaChip key={c} label={c} color="#818CF8" />
+              ))}
+              {game.mechanics?.map((m) => (
+                <MetaChip key={m} label={m} color="#34D399" />
+              ))}
+            </View>
+          </>
+        )}
+
         <Text className="mb-2 mt-6 text-base font-semibold text-[#F9F9F9]">
           {Copy.gameDetail.notesTitle}
         </Text>
@@ -163,6 +184,47 @@ export default function GameDetailScreen(): React.JSX.Element {
           multiline
           style={{ minHeight: 90, textAlignVertical: 'top' }}
         />
+
+        {/* Play history */}
+        <Text className="mb-2 mt-6 text-base font-semibold text-[#F9F9F9]">
+          {Copy.gameDetail.playsHistoryTitle}
+        </Text>
+        {gamePlays.length === 0 ? (
+          <Text className="text-sm text-neutral-500">{Copy.gameDetail.noPlaysYet}</Text>
+        ) : (
+          <View className="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] overflow-hidden">
+            {gamePlays.map((play, i) => {
+              const date = new Date(play.playedAt).toLocaleDateString(undefined, {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              });
+              const meta = [
+                play.playerCount !== undefined ? Copy.plays.playersShort(play.playerCount) : null,
+                play.durationMinutes !== undefined
+                  ? Copy.plays.durationShort(play.durationMinutes)
+                  : null,
+                play.location ?? null,
+              ]
+                .filter(Boolean)
+                .join('  ·  ');
+              return (
+                <View
+                  key={play.id}
+                  className={`px-4 py-3 ${i < gamePlays.length - 1 ? 'border-b border-[#2A2A2A]' : ''}`}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-sm font-medium text-[#F9F9F9]">{date}</Text>
+                    {meta.length > 0 && <Text className="text-xs text-neutral-500">{meta}</Text>}
+                  </View>
+                  {play.note !== undefined && play.note.length > 0 && (
+                    <Text className="mt-1 text-xs italic text-neutral-400">"{play.note}"</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         <TouchableOpacity
           onPress={handleRemove}

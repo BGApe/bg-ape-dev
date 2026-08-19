@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Image, Text, TouchableOpacity, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AskBar } from '@/components/AskBar';
+import { MetaChip, ratingColor, weightColor } from '@/components/MetaChip';
 import { Copy } from '@/constants/copy';
 import { AddGameSheet } from '@/features/collection/components/AddGameSheet';
 import { useAddGame } from '@/features/collection/hooks/useAddGame';
@@ -66,6 +67,25 @@ function GameRow({
         </Text>
         {meta.length > 0 && <Text className="mt-0.5 text-xs text-neutral-500">{meta}</Text>}
         <Text className="mt-0.5 text-xs text-neutral-400">{stats}</Text>
+        {game.bggId !== undefined && (
+          <View className="mt-1.5 flex-row flex-wrap">
+            {game.averageWeight !== undefined && (
+              <MetaChip
+                label={`⚖ ${game.averageWeight.toFixed(1)}`}
+                color={weightColor(game.averageWeight)}
+              />
+            )}
+            {game.bggRating !== undefined && (
+              <MetaChip
+                label={`★ ${game.bggRating.toFixed(1)}`}
+                color={ratingColor(game.bggRating)}
+              />
+            )}
+            {game.mechanics?.[0] !== undefined && (
+              <MetaChip label={game.mechanics[0]} color="#818CF8" />
+            )}
+          </View>
+        )}
       </View>
       <TouchableOpacity
         onPress={() => onRemove(game)}
