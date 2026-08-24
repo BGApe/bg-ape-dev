@@ -4,7 +4,7 @@ Living status doc for the v5 work stream. v4 (native build running on device, ch
 persistence, auth, account, collection) is complete; see
 `version4-inprogress.md` and `version4-to-v5-handover.md` for that history.
 
-Last updated: 2026-08-18
+Last updated: 2026-08-24
 
 ---
 
@@ -95,7 +95,28 @@ Dependency-free play logging (no date-picker or chart libs added).
 > NOTE: Stats/Home charts and "top played" are **not** wired to plays yet — that's
 > the next step (see Batch 2 below). Logging + list only, per request.
 
-### 2.4 BGG whisperer + collection detail (DONE, typecheck + lint + tests green)
+### 2.4 Real LLM assistant — Gemini 2.0 Flash via Cloud Function (DONE, typecheck + lint + tests green)
+
+- **Cloud Function** (`functions/src/assistant/assistantCall.ts`): Gen 2 callable,
+  `europe-west10`, App Check enforced, authenticated. Calls Gemini 2.0 Flash with
+  `responseSchema` JSON mode — guarantees a structured `AssistantResponse` every time.
+- **Prompt system** (`functions/src/assistant/prompts.ts`): per-`threadReason` system
+  prompts (recommendation / setup / rules / general) + `isFirstMessage` guidance
+  (ask 1-2 clarifying questions when context is thin).
+- **Provider** (`src/modules/assistant/VertexAIInFirebaseAssistantProvider.ts`):
+  implements `AssistantProvider`; calls the function via the `callable` factory.
+  Internal Promise cache ensures `stream()` → `complete()` makes only **one** network
+  round-trip per turn. `stream()` simulates character-by-character animation from the
+  complete response.
+- **Provider selector** (`src/modules/assistant/activeAssistantProvider.ts`): mirrors
+  `activeChatRepository` pattern. `featureFlags.assistant.useRealProvider = true`
+  (was `false`). `MockAssistantProvider` remains as a fallback.
+- **API key setup** (required before first run):
+  1. Go to https://aistudio.google.com/app/apikey and create a free API key.
+  2. `firebase functions:secrets:set GEMINI_API_KEY` → paste the key.
+  3. Deploy: `firebase deploy --only functions`.
+
+### 2.5 BGG whisperer + collection detail (DONE — auth pending BGG approval)
 
 BoardGameGeek-powered game lookup and a richer collection.
 
@@ -124,16 +145,8 @@ BoardGameGeek-powered game lookup and a richer collection.
 
 ## 3. What is NOT done yet (roadmap)
 
-### Batch 2 — remaining
+### Batch 3 — integrations (later)
 
-- **Wire real data** into Home activity card, Stats charts, and top-played ranking
-  (now that the plays model exists — collection list already uses play counts).
-
-### Batch 3 — chat intelligence + integrations (later)
-
-- **Chat clarifying questions:** each scenario asks 1–3 questions before answering
-  (e.g. recommendation → players / preferred length / weight). Mock-driven now,
-  real LLM later.
 - **Integrations (future / OAuth):** BG Stats + other databases; sync with
   Messenger / WhatsApp / Gmail / Outlook (enables a future **game-night planner**);
   sync with local board-game cafés so the assistant knows what's playable there.

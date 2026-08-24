@@ -10,8 +10,8 @@ const appConfig = {
   region: 'europe-west10' as const,
 
   assistant: {
-    /** Active provider: 'mock' until Phase 5 enables 'vertexAi' via feature flag. */
-    defaultMode: 'mock' as const,
+    /** Active provider — 'vertexAi' (Gemini 2.0 Flash via Cloud Function). */
+    defaultMode: 'vertexAi' as const,
     maxMessageLength: 1_000,
     requestTimeoutMs: 30_000,
   },

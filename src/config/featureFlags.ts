@@ -23,7 +23,7 @@ export type FeatureFlagConfig = {
 
 export const defaultFeatureFlags: FeatureFlagConfig = {
   assistant: {
-    useRealProvider: false,
+    useRealProvider: true,
     enableStreaming: false,
   },
   chat: {

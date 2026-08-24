@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { QueryKeys } from '@/constants/queryKeys';
 import { mapError } from '@/lib/mapError';
-import { mockAssistantProvider } from '@/modules/assistant/MockAssistantProvider';
+import { activeAssistantProvider } from '@/modules/assistant/activeAssistantProvider';
 import { firebaseAnalytics } from '@/services/analytics';
 import { logger } from '@/services/logger';
 import { useComposerStore } from '@/store/composerStore';
@@ -55,7 +55,7 @@ export function useSendMessage(thread: ChatThread | null) {
         text,
         thread.id,
         uid,
-        mockAssistantProvider,
+        activeAssistantProvider,
         chatRepository,
         { appendStreamChunk, clearStream },
         thread.reason,
