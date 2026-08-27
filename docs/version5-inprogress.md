@@ -4,7 +4,7 @@ Living status doc for the v5 work stream. v4 (native build running on device, ch
 persistence, auth, account, collection) is complete; see
 `version4-inprogress.md` and `version4-to-v5-handover.md` for that history.
 
-Last updated: 2026-08-24
+Last updated: 2026-08-27
 
 ---
 
@@ -116,20 +116,28 @@ Dependency-free play logging (no date-picker or chart libs added).
   2. `firebase functions:secrets:set GEMINI_API_KEY` → paste the key.
   3. Deploy: `firebase deploy --only functions`.
 
-### 2.5 BGG whisperer + collection detail (DONE — auth pending BGG approval)
+### 2.5 BGG whisperer + collection detail (DONE)
 
 BoardGameGeek-powered game lookup and a richer collection.
 
 - **Dependency:** `fast-xml-parser` (pure JS, no native rebuild).
-- **BGG client** (`src/services/bgg/`): `bggClient.search(query)` and
-  `bggClient.getThing(bggId)` against the public XML API2 (no key). Handles 202
-  (queued) / 429 (rate-limited) with retry+backoff; parses name/year/players/
-  playing time/thumbnail/image/weight/rating/rank. Client-side (no Cloud Function).
-  Designed to be reused by the future scanner.
+- **BGG client** (`src/services/bgg/`): `bggClient.search(query)`,
+  `bggClient.getThing(bggId)`, and `bggClient.getThings(bggIds[])` against the
+  public XML API2. Handles 202 (queued) / 429 (rate-limited) with serial request
+  queue (1.5 s min gap) + exponential backoff (honours `Retry-After`). Parses
+  name/year/players/playing time/thumbnail/image/weight/rating/rank/categories/
+  mechanics. Client-side (no Cloud Function). Designed to be reused by the future
+  scanner.
+- **Developer token:** BGG registration approved; token stored in
+  `.env.development.local` (gitignored) as `EXPO_PUBLIC_BGG_TOKEN`. Loaded via
+  the validated `src/config/env.ts` schema (optional — falls back to keyless public
+  API). Sent as `Authorization: Bearer <token>` on every BGG request.
+  See `.env.example` for setup instructions.
 - **Hooks:** `useBggSearch` (debounced by caller, cached), `useBggThing`,
   `useUpdateGame` (optimistic — inline notes). Query keys `bgg.search/thing`.
 - **Enriched `CollectionGame`:** added `playingTime`, `averageWeight`, `bggRating`,
-  `bggRank`, `notes`, plus a `'bgg'` source. Repo gained `update()`.
+  `bggRank`, `notes`, `categories`, `mechanics`, plus a `'bgg'` source. Repo
+  gained `update()`.
 - **Add flow** (`AddGameSheet`): debounced BGG search → pick a result (fetches full
   details and stores them) → added with `source: 'bgg'`; free-text "Add manually"
   fallback (`source: 'manual'`).
@@ -141,9 +149,83 @@ BoardGameGeek-powered game lookup and a richer collection.
   gaps), your play count, and an **editable notes** field (saves on blur), plus
   remove.
 
+### 2.6 Enriched plays — players, locations, per-player stats (DONE, typecheck + lint + tests green)
+
+Rich play logging with reusable player and location profiles, per-play participant
+tracking, and game metadata denormalisation for future filtering.
+
+- **New branded types:** `PlayerId`, `LocationId` added to `src/types/index.ts`.
+
+- **Player profiles** (`src/features/players/`): stored at
+  `users/{uid}/players/{playerId}` with `name`, optional `nickname`, `createdAt`.
+  Repository: `list`, `add`, `update`, `remove`. Hooks: `usePlayers`,
+  `useCreatePlayer`, `useDeletePlayer`.
+
+- **Location profiles** (`src/features/locations/`): stored at
+  `users/{uid}/locations/{locationId}` with `name`, `createdAt`. Same repository
+  - hook pattern as players.
+
+- **Extended `Play` document:** new optional fields —
+  `participants: PlayParticipant[]` (each: `playerId`, `name` denormalised, `score?`,
+  `won`), `locationId`, `locationName` (denormalised), `gameCategories`,
+  `gameMechanics`, `gameWeight`. Legacy `location` (string) and `playerCount`
+  retained for backward compatibility with older documents.
+
+- **`useLogPlay` smart resolution:**
+  - **Find-or-create players**: if a participant name doesn't match an existing
+    profile (case-insensitive), a new player profile is created automatically.
+  - **Find-or-create locations**: same pattern for locations.
+  - **Game metadata denormalisation**: on save, looks up the game in the React
+    Query collection cache and copies `categories`, `mechanics`, `averageWeight`
+    onto the play document — enables future server-side filtering without joins,
+    even if the source `CollectionGame` is later deleted.
+
+- **`LogPlaySheet` redesign:** participant rows (name autocomplete from existing
+  profiles, per-player score input, Won toggle), location picker (chip row from
+  saved profiles or type-to-create). Backward-compatible: old single player-count
+  field still works via `playerCount` on existing documents.
+
+- **`PlayRow` updates:** participant chips with winner highlight (★ gold), optional
+  score inline. Each participant name is tappable → navigates to the per-player
+  stats screen.
+
+- **Per-player stats screen** (`app/(app)/player.tsx`, hidden route `?id=`):
+  summary cards (total plays, wins, win rate, avg score), most played game,
+  chronological play history (up to 20 entries).
+
+- **Stats screen filter layer** (`app/(app)/stats.tsx`):
+  - Player filter chips (derived from plays' participants — only players who appear
+    in at least one play are shown).
+  - Location filter chips (same pattern).
+  - "Game type" skeleton section — placeholder chips greyed out with a note
+    "Available once BGG data is enriched"; will populate automatically once plays
+    carry `gameCategories`/`gameMechanics` from BGG-enriched collection games.
+  - All summary cards and chart buckets respect the active filters.
+  - Players leaderboard at the bottom: each player with plays → total plays + win
+    rate → tappable to the per-player stats screen.
+
 ---
 
 ## 3. What is NOT done yet (roadmap)
+
+### Near-term — collection enrichment
+
+- **Enrich existing manually-added games:** `CollectionGame` documents added before
+  the BGG client existed have no `categories`, `mechanics`, or `averageWeight`. A
+  one-time enrichment pass (triggered by a UI button or background job) could call
+  `bggClient.getThings(bggIds)` in batches of 20 and backfill those fields. Once
+  enriched, any newly logged play that references the game will automatically carry
+  the metadata.
+- **Game type filter (Stats screen):** the "Game type" filter section skeleton is
+  already in the Stats screen; it will populate automatically once plays carry
+  `gameCategories`/`gameMechanics`. No code change required — just needs enriched
+  collection data.
+
+### Near-term — BGG user OAuth
+
+- **Import BGG collection via OAuth:** the developer token is the prerequisite for
+  registering a BGG OAuth application. Once set up, users can link their BGG account
+  and pull their existing rated/owned game list into BG Ape in one tap.
 
 ### Batch 3 — integrations (later)
 
@@ -214,6 +296,13 @@ re-run `adb reverse tcp:8081 tcp:8081` and reload.
   `firebase-crashlytics-gradle` classpath (`android/build.gradle`) and
   `apply plugin: 'com.google.firebase.crashlytics'` (`android/app/build.gradle`).
 - **`react-hook-form` is pinned to 7.74.0** (7.76 broke TextInput typing on RN).
+- **expo-router typed routes and new hidden routes:** new hidden routes (e.g.
+  `app/(app)/player.tsx`) are not in `.expo/types/router.d.ts` until Metro
+  restarts. Until then, navigate using
+  `router.push({ pathname: Routes.player, ... } as unknown as Href)`.
+- **`.env.development.local`** is gitignored (covered by `.env*.local` pattern in
+  `.gitignore`). Store machine-local secrets there — never in `.env.development`
+  which is committed.
 
 ---
 

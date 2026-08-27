@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 
+import { env } from '@/config/env';
 import { logger } from '@/services/logger';
 
 import type { BggSearchResult, BggThing } from './types';
@@ -121,11 +122,20 @@ function extractLinks(item: XmlNode, type: string): string[] {
  * BGG / Cloudflare requires a descriptive User-Agent so requests are not
  * treated as anonymous bots. BGG's own Terms of Use ask you to identify
  * your application here.
+ *
+ * The Authorization header is included when EXPO_PUBLIC_BGG_TOKEN is set.
+ * The public XML API2 works without it; the token raises rate limits.
  */
-const BGG_HEADERS = {
-  'User-Agent': 'BGApe/1.0 (board-game companion app; https://bgape.dev)',
-  Accept: 'application/xml, text/xml, */*',
-};
+function buildBggHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'User-Agent': 'BGApe/1.0 (board-game companion app; https://bgape.dev)',
+    Accept: 'application/xml, text/xml, */*',
+  };
+  if (env.EXPO_PUBLIC_BGG_TOKEN) {
+    headers['Authorization'] = `Bearer ${env.EXPO_PUBLIC_BGG_TOKEN}`;
+  }
+  return headers;
+}
 
 /**
  * Fetches XML from BGG through the shared rate-limit queue.
@@ -142,7 +152,7 @@ async function fetchXml(url: string): Promise<string | null> {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       let res: Response;
       try {
-        res = await fetch(url, { headers: BGG_HEADERS });
+        res = await fetch(url, { headers: buildBggHeaders() });
       } catch (err) {
         logger.warn('[BGG] Network error', { url, attempt, err });
         await backoffDelay(attempt);
