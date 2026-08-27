@@ -19,3 +19,7 @@ export type ThreadId = Brand<string, 'ThreadId'>;
 export type MessageId = Brand<string, 'MessageId'>;
 export type GameId = Brand<string, 'GameId'>;
 export type PlayId = Brand<string, 'PlayId'>;
+/** Identifies a reusable player profile (users/{uid}/players/{playerId}). */
+export type PlayerId = Brand<string, 'PlayerId'>;
+/** Identifies a reusable location profile (users/{uid}/locations/{locationId}). */
+export type LocationId = Brand<string, 'LocationId'>;
