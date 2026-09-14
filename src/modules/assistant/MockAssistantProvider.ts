@@ -83,11 +83,14 @@ function hasFilterSignals(text: string): boolean {
     t.includes('complexity') ||
     t.includes('minutes') ||
     t.includes('from my collection') ||
-    t.includes('category') ||
+    t.includes('bgg categories') ||
     t.includes('mechanics') ||
     t.includes('table space') ||
-    t.includes('cooperative') ||
-    t.includes('competitive')
+    t.includes('fresh picks') ||
+    t.includes('frequently played favorites') ||
+    t.includes('played recently') ||
+    t.includes('cooperative game') ||
+    t.includes('deck, bag, and pool building')
   );
 }
 

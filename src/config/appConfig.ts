@@ -14,6 +14,16 @@ const appConfig = {
     defaultMode: 'vertexAi' as const,
     maxMessageLength: 1_000,
     requestTimeoutMs: 30_000,
+    /**
+     * How much owned-game metadata to attach on recommendation turns.
+     * `optimal` balances usefulness vs tokens — see agent cost analysis.
+     */
+    collectionContextLevel: 'optimal' as 'minimal' | 'optimal' | 'maximal',
+    /**
+     * Prior-message window for multi-turn context.
+     * `optimal` = last 6 messages (~3 turns), truncated per message.
+     */
+    conversationHistoryLevel: 'optimal' as 'minimal' | 'optimal' | 'maximal',
   },
 
   chat: {

@@ -79,7 +79,7 @@ export default function IntentScreen(): React.JSX.Element {
 
   const filterPanel =
     reason === 'recommendation' ? (
-      <GamePickerFilters onPromptChange={handlePromptChange} />
+      <GamePickerFilters games={games} onPromptChange={handlePromptChange} />
     ) : reason === 'setup' ? (
       <QuickSetupFilters games={games} onPromptChange={handlePromptChange} />
     ) : reason === 'rules' ? (

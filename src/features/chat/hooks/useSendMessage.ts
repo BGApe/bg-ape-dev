@@ -1,6 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import appConfig from '@/config/appConfig';
 import { QueryKeys } from '@/constants/queryKeys';
+import {
+  buildCollectionContext,
+  detectActivityBias,
+} from '@/features/assistant/lib/collectionContext';
+import { buildConversationHistory } from '@/features/assistant/lib/conversationHistory';
+import type { ActivityBias } from '@/features/assistant/types';
+import type { CollectionGame } from '@/features/collection/types';
+import type { Play } from '@/features/plays/types';
 import { mapError } from '@/lib/mapError';
 import { activeAssistantProvider } from '@/modules/assistant/activeAssistantProvider';
 import { firebaseAnalytics } from '@/services/analytics';
@@ -11,6 +20,17 @@ import type { MessageId } from '@/types';
 import { chatRepository } from '../api/activeChatRepository';
 import { runAssistantTurn } from '../services/assistantOrchestrator';
 import type { ChatMessage, ChatThread } from '../types';
+
+function resolveActivityBias(messages: ChatMessage[], currentText: string): ActivityBias {
+  const fromCurrent = detectActivityBias(currentText);
+  if (fromCurrent !== 'none') return fromCurrent;
+  for (const m of messages) {
+    if (m.role !== 'user') continue;
+    const bias = detectActivityBias(m.content);
+    if (bias !== 'none') return bias;
+  }
+  return 'none';
+}
 
 export function useSendMessage(thread: ChatThread | null) {
   const queryClient = useQueryClient();
@@ -51,6 +71,31 @@ export function useSendMessage(thread: ChatThread | null) {
         (prev ?? []).map((m) => (m.id === optimisticMessage.id ? userMessage : m)),
       );
 
+      // History from messages that existed before this turn (excludes current text).
+      const recentMessages = buildConversationHistory(
+        existingMessages,
+        appConfig.assistant.conversationHistoryLevel,
+      );
+
+      const recommendationExtras =
+        thread.reason === 'recommendation'
+          ? (() => {
+              const games =
+                queryClient.getQueryData<CollectionGame[]>(QueryKeys.collection.list(uid)) ?? [];
+              const plays = queryClient.getQueryData<Play[]>(QueryKeys.plays.list(uid)) ?? [];
+              const collectionContext = buildCollectionContext(
+                games,
+                plays,
+                appConfig.assistant.collectionContextLevel,
+              );
+              const activityBias = resolveActivityBias(existingMessages, text);
+              return {
+                collectionContext,
+                activityBias,
+              };
+            })()
+          : {};
+
       const assistantMessages = await runAssistantTurn(
         text,
         thread.id,
@@ -60,6 +105,10 @@ export function useSendMessage(thread: ChatThread | null) {
         { appendStreamChunk, clearStream },
         thread.reason,
         isFirstMessage,
+        {
+          ...recommendationExtras,
+          recentMessages,
+        },
       );
 
       queryClient.setQueryData<ChatMessage[]>(QueryKeys.chat.messages(thread.id), (prev) => [

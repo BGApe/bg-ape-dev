@@ -1,28 +1,34 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Copy } from '@/constants/copy';
+import type { ActivityBias } from '@/features/assistant/types';
+import type { CollectionGame } from '@/features/collection/types';
+
+import { resolveGamePickerTags } from '../../lib/bggTagOptions';
 
 const C = Copy.intent.gamePicker;
 
 type Complexity = (typeof C.complexityOptions)[number];
 type PlayTime = (typeof C.playTimeOptions)[number];
-type Category = (typeof C.categoryOptions)[number];
 type TableSize = (typeof C.tableSizeOptions)[number];
+type ActivityOption = (typeof C.activityBiasOptions)[number];
 
 type State = {
   fromCollection: boolean;
+  activityBias: ActivityBias;
   playerCount: string;
   complexity: Complexity | undefined;
   playTime: PlayTime | undefined;
-  categories: Category[];
+  categories: string[];
   tableSize: TableSize | undefined;
   notes: string;
 };
 
 const INITIAL: State = {
   fromCollection: false,
+  activityBias: 'none',
   playerCount: '',
   complexity: undefined,
   playTime: undefined,
@@ -32,6 +38,7 @@ const INITIAL: State = {
 };
 
 type Props = {
+  games: CollectionGame[];
   onPromptChange: (prompt: string) => void;
 };
 
@@ -42,9 +49,12 @@ function buildPrompt(state: State): string {
   if (state.playerCount.trim()) parts.push(P.players(state.playerCount.trim()));
   if (state.complexity) parts.push(P.complexity(state.complexity));
   if (state.playTime) parts.push(P.playTime(state.playTime));
-  if (state.categories.length > 0) parts.push(P.categories(state.categories as string[]));
+  if (state.categories.length > 0) parts.push(P.categories(state.categories));
   if (state.tableSize) parts.push(P.tableSize(state.tableSize));
   if (state.fromCollection) parts.push(P.fromCollection);
+  if (state.activityBias !== 'none') {
+    parts.push(P.activityBias[state.activityBias]);
+  }
   if (state.notes.trim()) parts.push(state.notes.trim());
   return parts.join(' ');
 }
@@ -71,8 +81,9 @@ function Chip({
   );
 }
 
-export function GamePickerFilters({ onPromptChange }: Props): React.JSX.Element {
+export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.Element {
   const [state, setState] = useState<State>(INITIAL);
+  const tagOptions = useMemo(() => resolveGamePickerTags(games), [games]);
 
   function update(patch: Partial<State>) {
     const next = { ...state, ...patch };
@@ -80,7 +91,7 @@ export function GamePickerFilters({ onPromptChange }: Props): React.JSX.Element 
     onPromptChange(buildPrompt(next));
   }
 
-  function toggleCategory(cat: Category) {
+  function toggleCategory(cat: string) {
     const has = state.categories.includes(cat);
     update({
       categories: has ? state.categories.filter((c) => c !== cat) : [...state.categories, cat],
@@ -96,9 +107,9 @@ export function GamePickerFilters({ onPromptChange }: Props): React.JSX.Element 
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      {/* From my collection — plain toggle only */}
-      <View className="mb-4 flex-row items-center justify-between rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
-        <View>
+      {/* From my collection */}
+      <View className="mb-3 flex-row items-center justify-between rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
+        <View className="mr-3 flex-1">
           <Text className="text-sm text-[#F9F9F9]">{C.fromCollectionLabel}</Text>
           <Text className="mt-0.5 text-xs text-neutral-500">{C.fromCollectionHint}</Text>
         </View>
@@ -108,6 +119,22 @@ export function GamePickerFilters({ onPromptChange }: Props): React.JSX.Element 
           trackColor={{ false: '#2A2A2A', true: '#818CF8' }}
           thumbColor="#F9F9F9"
         />
+      </View>
+
+      {/* Activity bias — segmented ticker */}
+      <Text className="mb-1 text-xs uppercase tracking-wide text-neutral-500">
+        {C.activityBiasLabel}
+      </Text>
+      <Text className="mb-2 text-xs text-neutral-500">{C.activityBiasHint}</Text>
+      <View className="mb-4 flex-row flex-wrap">
+        {C.activityBiasOptions.map((opt: ActivityOption) => (
+          <Chip
+            key={opt.id}
+            label={opt.label}
+            selected={state.activityBias === opt.id}
+            onPress={() => update({ activityBias: opt.id })}
+          />
+        ))}
       </View>
 
       {/* Players */}
@@ -157,12 +184,12 @@ export function GamePickerFilters({ onPromptChange }: Props): React.JSX.Element 
         ))}
       </View>
 
-      {/* Category / Mechanics */}
+      {/* BGG Category / Mechanics */}
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
         {C.categoryLabel}
       </Text>
       <View className="mb-4 flex-row flex-wrap">
-        {C.categoryOptions.map((opt) => (
+        {tagOptions.map((opt) => (
           <Chip
             key={opt}
             label={opt}

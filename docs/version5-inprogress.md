@@ -240,6 +240,15 @@ tracking, and game metadata denormalisation for future filtering.
   BGG client (shared with the whisperer), image capture + review UI, app.config
   plugin + prebuild.
 
+### Ops / cost — to be decided later
+
+- **Artifact Registry cleanup policy (TBD):** `firebase deploy --only functions`
+  now succeeds, but warns that no cleanup policy is set for the build-image
+  repositories in `europe-west10`. Old Cloud Build container images accumulate and
+  incur a small monthly cost. **Decision deferred.** When ready, set it with
+  `firebase functions:artifacts:setpolicy --location europe-west10` (add `--force`
+  to accept the default retention). Not blocking; deploys work as-is.
+
 ---
 
 ## 4. Running on a physical device over Wi-Fi (no cable)

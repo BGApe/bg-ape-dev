@@ -1,4 +1,9 @@
 import type { AssistantProvider } from '@/features/assistant/services/AssistantProvider';
+import type {
+  ActivityBias,
+  AssistantHistoryMessage,
+  CollectionGameContextItem,
+} from '@/features/assistant/types';
 import { logger } from '@/services/logger';
 import type { ThreadId, UserId } from '@/types';
 
@@ -11,6 +16,12 @@ import { resolveIntent } from './intentResolver';
 type ComposerActions = {
   appendStreamChunk: (chunk: string) => void;
   clearStream: () => void;
+};
+
+type AssistantTurnExtras = {
+  collectionContext?: CollectionGameContextItem[];
+  activityBias?: ActivityBias;
+  recentMessages?: AssistantHistoryMessage[];
 };
 
 /**
@@ -27,17 +38,34 @@ export async function runAssistantTurn(
   composer: ComposerActions,
   threadReason: ChatReason = 'general',
   isFirstMessage: boolean = false,
+  extras: AssistantTurnExtras = {},
 ): Promise<ChatMessage[]> {
   const intent = resolveIntent(text);
 
-  for await (const chunk of provider.stream({ text, intent, threadReason, isFirstMessage })) {
+  const request = {
+    text,
+    intent,
+    threadReason,
+    isFirstMessage,
+    ...(extras.collectionContext !== undefined
+      ? { collectionContext: extras.collectionContext }
+      : {}),
+    ...(extras.activityBias !== undefined && extras.activityBias !== 'none'
+      ? { activityBias: extras.activityBias }
+      : {}),
+    ...(extras.recentMessages !== undefined && extras.recentMessages.length > 0
+      ? { recentMessages: extras.recentMessages }
+      : {}),
+  };
+
+  for await (const chunk of provider.stream(request)) {
     composer.appendStreamChunk(chunk.delta);
     if (chunk.done) break;
   }
 
   composer.clearStream();
 
-  const response = await provider.complete({ text, intent, threadReason, isFirstMessage });
+  const response = await provider.complete(request);
   const messages = assistantResponseToChatMessages(response, threadId);
 
   const persisted: ChatMessage[] = [];
@@ -56,6 +84,8 @@ export async function runAssistantTurn(
     threadId,
     uid,
     messageCount: persisted.length,
+    collectionSize: extras.collectionContext?.length ?? 0,
+    historySize: extras.recentMessages?.length ?? 0,
   });
 
   return persisted;

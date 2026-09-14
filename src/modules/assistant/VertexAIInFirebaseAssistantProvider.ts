@@ -15,6 +15,17 @@ function buildStreamText(response: AssistantResponse): string {
   return `${response.title}\n\n${response.summary}\n\n${bulletLines}`;
 }
 
+function cacheKey(request: AssistantRequest): string {
+  return JSON.stringify({
+    text: request.text,
+    threadReason: request.threadReason,
+    isFirstMessage: request.isFirstMessage,
+    activityBias: request.activityBias ?? 'none',
+    collection: request.collectionContext?.map((g) => g.name) ?? [],
+    history: request.recentMessages?.map((m) => `${m.role}:${m.content.slice(0, 40)}`) ?? [],
+  });
+}
+
 /**
  * Calls the `assistantCall` Cloud Function (Gemini 2.0 Flash, europe-west10).
  *
@@ -23,23 +34,24 @@ function buildStreamText(response: AssistantResponse): string {
  */
 export class VertexAIInFirebaseAssistantProvider implements AssistantProvider {
   private _inFlight: Promise<AssistantResponse> | null = null;
-  private _lastText: string | null = null;
+  private _lastKey: string | null = null;
   private _lastResponse: AssistantResponse | null = null;
 
   private _callable = callable<AssistantRequest, AssistantResponse>('assistantCall');
 
-  private _getCached(text: string): AssistantResponse | null {
-    return this._lastText === text && this._lastResponse ? this._lastResponse : null;
+  private _getCached(request: AssistantRequest): AssistantResponse | null {
+    const key = cacheKey(request);
+    return this._lastKey === key && this._lastResponse ? this._lastResponse : null;
   }
 
   private async _ensureResponse(request: AssistantRequest): Promise<AssistantResponse> {
-    const cached = this._getCached(request.text);
+    const cached = this._getCached(request);
     if (cached) return cached;
 
     if (!this._inFlight) {
       this._inFlight = this._callable(request)
         .then((result) => {
-          this._lastText = request.text;
+          this._lastKey = cacheKey(request);
           this._lastResponse = result;
           return result;
         })
