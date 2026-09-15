@@ -13,8 +13,13 @@ export function useDeletePlayer() {
   const { user } = useAuthSession();
 
   return useMutation({
-    mutationFn: (playerId: PlayerId) => {
+    mutationFn: async (playerId: PlayerId) => {
       if (!user) return Promise.reject(new Error('Not authenticated.'));
+      const players = await firestorePlayersRepository.list(user.uid);
+      const target = players.find((p) => p.id === playerId);
+      if (target?.isSelf === true) {
+        return Promise.reject(new Error('Cannot delete your self player profile.'));
+      }
       return firestorePlayersRepository.remove(user.uid, playerId);
     },
     onSuccess() {

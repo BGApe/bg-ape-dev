@@ -58,12 +58,14 @@ export const Copy = {
   },
   collection: {
     title: 'My Collection',
-    empty: 'No games yet. Tap + to search BoardGameGeek and add your first game.',
+    empty: 'No games yet. Tap Add game to search BoardGameGeek and add your first game.',
     addPlaceholder: 'Game name…',
     addButton: 'Add game',
     addTitle: 'Add a game',
     searchPlaceholder: 'Search BoardGameGeek…',
+    listSearchPlaceholder: 'Search by name…',
     noResults: 'No games found on BoardGameGeek.',
+    noFilterMatches: 'No games match these filters.',
     addManually: (q: string) => `Add "${q}" manually`,
     remove: 'Remove',
     removeConfirmTitle: 'Remove game',
@@ -71,13 +73,28 @@ export const Copy = {
     cancel: 'Cancel',
     countLabel: (n: number) => `${n} ${n === 1 ? 'game' : 'games'}`,
     playsLabel: (n: number) => `${n} ${n === 1 ? 'play' : 'plays'}`,
+    winsLabel: (n: number) => `${n} ${n === 1 ? 'win' : 'wins'}`,
+    lastPlayLabel: (rel: string) => `Last play ${rel}`,
     ownedSince: (date: string) => `Owned since ${date}`,
+    ownedSinceShort: (date: string) => `Owned ${date}`,
     rankLabel: (n: number) => `BGG #${n}`,
+    weightShort: (n: number) => `⚖ ${n.toFixed(1)}`,
+    timeShort: (n: number) => `${n}m`,
+    showExpansions: 'Show expansions',
+    sortName: 'A–Z',
+    sortMostPlayed: 'Most played',
+    sortLeastPlayed: 'Least played',
+    sortLastPlayed: 'Last played',
+    filterPlayers: 'Players',
+    filterComplexity: 'Weight',
+    filterPlayTime: 'Time',
+    filterTags: 'Tags',
+    clearFilter: 'Clear',
     playersLabel: (min?: number, max?: number) => {
       if (min === undefined && max === undefined) return '';
-      if (min !== undefined && max !== undefined && min !== max) return `${min}–${max} players`;
+      if (min !== undefined && max !== undefined && min !== max) return `${min}–${max}p`;
       const n = min ?? max;
-      return `${n} players`;
+      return `${n}p`;
     },
   },
   gameDetail: {
@@ -87,7 +104,11 @@ export const Copy = {
     ratingLabel: 'BGG rating',
     rankLabel: 'BGG rank',
     playsLabel: 'Your plays',
+    winsLabel: 'Your wins',
+    lastPlayLabel: 'Last play',
     statsTitle: 'Stats',
+    playStatsTitle: 'Your play stats',
+    chartTitle: 'Plays (6 months)',
     notesTitle: 'My notes',
     notesPlaceholder: 'Add your own notes about this game…',
     remove: 'Remove from collection',
@@ -97,8 +118,17 @@ export const Copy = {
     notFound: 'Game not found.',
     dash: '—',
     categoriesTitle: 'Categories & Mechanics',
+    expansionsTitle: 'Expansions',
+    expansionsAvailable: (n: number) =>
+      `${n} ${n === 1 ? 'expansion' : 'expansions'} listed on BoardGameGeek`,
+    expansionsEditA11y: 'Add expansions',
+    expansionsOwnedNone: 'None owned yet — tap ✎ to add from BoardGameGeek.',
+    expansionsOwnedTitle: 'Owned expansions',
+    ownedExpansionsSubtitle: (names: string) => names,
     playsHistoryTitle: 'Play history',
     noPlaysYet: 'No plays recorded yet.',
+    quickSetupButton: 'Quick setup',
+    rulesHelpButton: 'Rules help',
   },
   tabs: {
     home: 'Home',
@@ -161,6 +191,11 @@ export const Copy = {
     durationShort: (n: number) => `${n}m`,
     winnerLabel: (name: string) => `★ ${name}`,
     noWinner: 'No winner recorded',
+    expansionsLabel: 'Expansions used',
+    expansionsHint: 'Optional — pick expansions used this session',
+    editPlay: 'Edit play',
+    saveEdit: 'Save changes',
+    pickDate: 'Pick date',
   },
   players: {
     title: 'Player stats',
@@ -199,6 +234,9 @@ export const Copy = {
     integrationsTitle: 'Integrations',
     integrationsSubtitle: 'Connect your gaming accounts to unlock more.',
     comingSoon: 'Coming soon',
+    selfPlayerLabel: 'Your player name',
+    selfPlayerHint: 'Used for wins and play stats. Shown as a participant when logging plays.',
+    selfPlayerPlaceholder: 'Me',
   },
   intent: {
     backButton: '‹',
@@ -250,6 +288,9 @@ export const Copy = {
       fromCollectionLabel: 'From my collection',
       collectionDropdownPlaceholder: 'Pick a game…',
       gameNamePlaceholder: 'Type a game name…',
+      playersLabel: 'Players',
+      playersRequiredHint: 'How many players?',
+      playersFromSessionHint: 'Reused from your recent game pick',
       depthLabel: 'How deep should we go?',
       depthOptions: [
         { id: 'quick', label: 'Start and go — 5 minutes' },
@@ -258,6 +299,8 @@ export const Copy = {
       ] as const,
       promptParts: {
         intro: (game: string) => (game ? `Quick setup guide for ${game}.` : 'Quick setup guide.'),
+        /** Same wording as gamePicker so session reuse can parse either flow. */
+        players: (n: string) => `We are ${n} players.`,
         depth: {
           quick: 'Give me just enough to start playing right now (5 minutes).',
           basic: 'Walk me through the core rules so we understand the basics (15 minutes).',

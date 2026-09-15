@@ -2,7 +2,7 @@ import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import type React from 'react';
 import { useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Copy } from '@/constants/copy';
 import { Routes } from '@/constants/routes';
@@ -14,6 +14,7 @@ type Props = {
   play: Play;
   onSaveNote: (playId: PlayId, note: string) => void;
   onDelete: (play: Play) => void;
+  onEdit: (play: Play) => void;
 };
 
 function formatDate(ts: number): string {
@@ -24,7 +25,7 @@ function formatDate(ts: number): string {
   });
 }
 
-export function PlayRow({ play, onSaveNote, onDelete }: Props): React.JSX.Element {
+export function PlayRow({ play, onSaveNote, onDelete, onEdit }: Props): React.JSX.Element {
   const router = useRouter();
   const [noteDraft, setNoteDraft] = useState(play.note ?? '');
 
@@ -35,11 +36,9 @@ export function PlayRow({ play, onSaveNote, onDelete }: Props): React.JSX.Elemen
     }
   }
 
-  // ── Participants ─────────────────────────────────────────────────────────────
   const participants = play.participants ?? [];
   const winners = participants.filter((p) => p.won);
 
-  // ── Meta line (location · player count · duration) ───────────────────────────
   const meta: string[] = [];
   const locationDisplay = play.locationName ?? play.location;
   if (locationDisplay) meta.push(locationDisplay);
@@ -50,15 +49,17 @@ export function PlayRow({ play, onSaveNote, onDelete }: Props): React.JSX.Elemen
     meta.push(Copy.plays.playersShort(play.playerCount));
   }
   if (play.durationMinutes !== undefined) meta.push(Copy.plays.durationShort(play.durationMinutes));
+  if (play.expansionNames !== undefined && play.expansionNames.length > 0) {
+    meta.push(`+${play.expansionNames.length} exp`);
+  }
 
   return (
-    <TouchableOpacity
+    <Pressable
+      onPress={() => onEdit(play)}
       onLongPress={() => onDelete(play)}
       accessibilityRole="button"
-      activeOpacity={1}
       className="mx-4 mb-2 rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3"
     >
-      {/* Header row */}
       <View className="flex-row items-center justify-between">
         <Text className="flex-1 pr-2 text-base font-semibold text-[#F9F9F9]" numberOfLines={1}>
           {play.gameName}
@@ -66,23 +67,28 @@ export function PlayRow({ play, onSaveNote, onDelete }: Props): React.JSX.Elemen
         <Text className="text-xs text-neutral-500">{formatDate(play.playedAt)}</Text>
       </View>
 
-      {/* Meta line */}
       {meta.length > 0 && (
         <Text className="mt-1 text-xs text-neutral-400">{meta.join('  ·  ')}</Text>
       )}
 
-      {/* Participants with winner highlight */}
+      {play.expansionNames !== undefined && play.expansionNames.length > 0 && (
+        <Text className="mt-1 text-xs text-neutral-500" numberOfLines={2}>
+          {play.expansionNames.join(' · ')}
+        </Text>
+      )}
+
       {participants.length > 0 && (
         <View className="mt-2 flex-row flex-wrap gap-1">
           {participants.map((p) => (
-            <TouchableOpacity
+            <Pressable
               key={p.playerId}
-              onPress={() =>
+              onPress={(e) => {
+                e.stopPropagation?.();
                 router.push({
                   pathname: Routes.player,
                   params: { id: p.playerId },
-                } as unknown as Href)
-              }
+                } as unknown as Href);
+              }}
               accessibilityRole="button"
               className={`rounded-full border px-2.5 py-0.5 ${
                 p.won ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-[#2A2A2A] bg-[#141414]'
@@ -92,17 +98,15 @@ export function PlayRow({ play, onSaveNote, onDelete }: Props): React.JSX.Elemen
                 {p.won ? `★ ${p.name}` : p.name}
                 {p.score !== undefined ? ` · ${p.score}` : ''}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       )}
 
-      {/* No winner note (only when participants exist and none won) */}
       {participants.length > 0 && winners.length === 0 && (
         <Text className="mt-1 text-xs text-neutral-600">{Copy.plays.noWinner}</Text>
       )}
 
-      {/* Inline-editable note */}
       <TextInput
         className="mt-2 rounded-lg bg-[#141414] px-3 py-2 text-sm text-[#E5E5E5]"
         placeholder={Copy.plays.noteRowPlaceholder}
@@ -111,7 +115,8 @@ export function PlayRow({ play, onSaveNote, onDelete }: Props): React.JSX.Elemen
         onChangeText={setNoteDraft}
         onBlur={handleNoteBlur}
         multiline
+        onPressIn={(e) => e.stopPropagation?.()}
       />
-    </TouchableOpacity>
+    </Pressable>
   );
 }

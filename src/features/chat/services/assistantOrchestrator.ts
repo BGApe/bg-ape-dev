@@ -3,6 +3,7 @@ import type {
   ActivityBias,
   AssistantHistoryMessage,
   CollectionGameContextItem,
+  SetupDepth,
 } from '@/features/assistant/types';
 import { logger } from '@/services/logger';
 import type { ThreadId, UserId } from '@/types';
@@ -21,6 +22,8 @@ type ComposerActions = {
 type AssistantTurnExtras = {
   collectionContext?: CollectionGameContextItem[];
   activityBias?: ActivityBias;
+  gameContext?: CollectionGameContextItem;
+  setupDepth?: SetupDepth;
   recentMessages?: AssistantHistoryMessage[];
 };
 
@@ -53,6 +56,8 @@ export async function runAssistantTurn(
     ...(extras.activityBias !== undefined && extras.activityBias !== 'none'
       ? { activityBias: extras.activityBias }
       : {}),
+    ...(extras.gameContext !== undefined ? { gameContext: extras.gameContext } : {}),
+    ...(extras.setupDepth !== undefined ? { setupDepth: extras.setupDepth } : {}),
     ...(extras.recentMessages !== undefined && extras.recentMessages.length > 0
       ? { recentMessages: extras.recentMessages }
       : {}),
@@ -85,6 +90,8 @@ export async function runAssistantTurn(
     uid,
     messageCount: persisted.length,
     collectionSize: extras.collectionContext?.length ?? 0,
+    hasGameContext: extras.gameContext !== undefined,
+    setupDepth: extras.setupDepth ?? null,
     historySize: extras.recentMessages?.length ?? 0,
   });
 

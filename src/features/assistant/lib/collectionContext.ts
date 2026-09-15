@@ -1,7 +1,12 @@
 import type { CollectionGame } from '@/features/collection/types';
 import type { Play } from '@/features/plays/types';
 
-import type { ActivityBias, CollectionContextLevel, CollectionGameContextItem } from '../types';
+import type {
+  ActivityBias,
+  CollectionContextLevel,
+  CollectionGameContextItem,
+  SetupDepth,
+} from '../types';
 
 const LEVEL_LIMITS: Record<
   CollectionContextLevel,
@@ -11,6 +16,9 @@ const LEVEL_LIMITS: Record<
   optimal: { maxGames: 40, maxTags: 2, includeStats: true, includeMeta: true },
   maximal: { maxGames: 80, maxTags: 6, includeStats: true, includeMeta: true },
 };
+
+/** Tag budget for a single focused game (setup/rules) — matches CF parse slice. */
+const GAME_CONTEXT_MAX_TAGS = 8;
 
 /** Default production level — see cost analysis in chat for min/max trade-offs. */
 export const DEFAULT_COLLECTION_CONTEXT_LEVEL: CollectionContextLevel = 'optimal';
@@ -95,6 +103,30 @@ export function buildCollectionContext(
   return items.slice(0, limits.maxGames);
 }
 
+/**
+ * Compact single-game snapshot for setup/rules.
+ * Includes metadata only — no play stats. Returns null when the game is an expansion.
+ */
+export function buildGameContext(game: CollectionGame): CollectionGameContextItem | null {
+  if (game.kind === 'expansion') return null;
+
+  const item: CollectionGameContextItem = { name: game.name };
+
+  if (game.minPlayers !== undefined) item.minPlayers = game.minPlayers;
+  if (game.maxPlayers !== undefined) item.maxPlayers = game.maxPlayers;
+  if (game.playingTime !== undefined) item.playingTime = game.playingTime;
+  if (game.averageWeight !== undefined) {
+    item.averageWeight = Math.round(game.averageWeight * 10) / 10;
+  }
+
+  const mechanics = (game.mechanics ?? []).slice(0, GAME_CONTEXT_MAX_TAGS);
+  const categories = (game.categories ?? []).slice(0, GAME_CONTEXT_MAX_TAGS);
+  if (mechanics.length > 0) item.mechanics = mechanics;
+  if (categories.length > 0) item.categories = categories;
+
+  return item;
+}
+
 /** Rough token estimate (~4 chars/token) for cost planning. */
 export function estimateCollectionContextTokens(items: CollectionGameContextItem[]): number {
   return Math.ceil(formatCollectionContextBlock(items).length / 4);
@@ -113,6 +145,27 @@ export function detectActivityBias(text: string): ActivityBias {
     return 'recent';
   }
   return 'none';
+}
+
+/**
+ * Recover setup depth from prompt text (Quick setup encodes it via depth option phrases).
+ * Returns undefined when no depth phrase is present — callers default to `'basic'`.
+ */
+export function detectSetupDepth(text: string): SetupDepth | undefined {
+  const t = text.toLowerCase();
+  if (t.includes('just enough to start playing right now')) return 'quick';
+  if (t.includes('complete rules walkthrough')) return 'full';
+  if (t.includes('understand the basics') || t.includes('core rules')) return 'basic';
+  return undefined;
+}
+
+/**
+ * Recover player-count chip id from intent prompt text.
+ * Matches game-picker (`We are N players.`) and legacy setup (`We'll be N players.`).
+ */
+export function detectPlayerCount(text: string): string | undefined {
+  const match = text.match(/\b(?:we are|we'll be)\s+(\d\+|\d+)\s+players\./i);
+  return match?.[1];
 }
 
 /**

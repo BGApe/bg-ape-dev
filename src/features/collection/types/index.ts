@@ -3,6 +3,9 @@ import type { GameId } from '@/types';
 /** How a game entered the collection. */
 export type GameSource = 'manual' | 'scanner' | 'bgg';
 
+/** Base game vs expansion (alternate editions stay `base`). */
+export type GameKind = 'base' | 'expansion';
+
 /**
  * A board game in the user's collection.
  * Stored at users/{uid}/games/{gameId}. Optional fields are populated when a
@@ -13,8 +16,14 @@ export type CollectionGame = {
   name: string;
   source: GameSource;
   addedAt: number;
+  /** Base game vs expansion. Defaults to `base` for legacy docs. */
+  kind: GameKind;
   /** BoardGameGeek thing id, when matched. */
   bggId?: number;
+  /** Parent base-game BGG id when `kind === 'expansion'`. */
+  parentBggId?: number;
+  /** Total expansions listed on BGG for this base game (at last fetch). */
+  bggExpansionCount?: number;
   yearPublished?: number;
   thumbnailUrl?: string;
   /** Edition/box language, e.g. 'English', 'German'. */
@@ -39,7 +48,22 @@ export type CollectionGame = {
 /** Fields a caller provides when adding a game; id/addedAt are assigned by the repo. */
 export type NewCollectionGame = Omit<CollectionGame, 'id' | 'addedAt'>;
 
-/** Mutable fields (e.g. editing custom notes). */
+/** Mutable fields (e.g. editing custom notes or BGG enrichment backfill). */
 export type CollectionGamePatch = {
   notes?: string;
+  yearPublished?: number;
+  thumbnailUrl?: string;
+  minPlayers?: number;
+  maxPlayers?: number;
+  playingTime?: number;
+  averageWeight?: number;
+  bggRating?: number;
+  bggRank?: number;
+  categories?: string[];
+  mechanics?: string[];
+  bggId?: number;
+  source?: GameSource;
+  kind?: GameKind;
+  parentBggId?: number;
+  bggExpansionCount?: number;
 };

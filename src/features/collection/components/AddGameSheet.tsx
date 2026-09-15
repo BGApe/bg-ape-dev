@@ -22,11 +22,19 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onAdd: (game: NewCollectionGame) => void;
+  /** Pre-fill the search box when the sheet opens. Triggers a search immediately. */
+  initialQuery?: string;
 };
 
 /** Maps a BGG search hit (+ optional full details) to a new collection game. */
 function toNewGame(result: BggSearchResult, thing: BggThing | null): NewCollectionGame {
-  const game: NewCollectionGame = { name: result.name, source: 'bgg', bggId: result.bggId };
+  const isExpansion = thing?.kind === 'boardgameexpansion';
+  const game: NewCollectionGame = {
+    name: thing?.name ?? result.name,
+    source: 'bgg',
+    bggId: result.bggId,
+    kind: isExpansion ? 'expansion' : 'base',
+  };
 
   const year = thing?.yearPublished ?? result.yearPublished;
   if (year !== undefined) game.yearPublished = year;
@@ -41,14 +49,25 @@ function toNewGame(result: BggSearchResult, thing: BggThing | null): NewCollecti
     game.categories = thing.categories;
   if (thing?.mechanics !== undefined && thing.mechanics.length > 0)
     game.mechanics = thing.mechanics;
+  if (isExpansion && thing?.parentBggId !== undefined) game.parentBggId = thing.parentBggId;
+  if (!isExpansion && thing?.expansionCount !== undefined)
+    game.bggExpansionCount = thing.expansionCount;
 
   return game;
 }
 
-export function AddGameSheet({ visible, onClose, onAdd }: Props): React.JSX.Element {
+export function AddGameSheet({ visible, onClose, onAdd, initialQuery }: Props): React.JSX.Element {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [addingId, setAddingId] = useState<number | null>(null);
+
+  // Pre-fill search when the sheet opens with an initialQuery.
+  useEffect(() => {
+    if (visible && initialQuery !== undefined && initialQuery.length > 0) {
+      setQuery(initialQuery);
+      setDebounced(initialQuery);
+    }
+  }, [visible, initialQuery]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 400);
@@ -79,7 +98,7 @@ export function AddGameSheet({ visible, onClose, onAdd }: Props): React.JSX.Elem
   function handleManualAdd() {
     const trimmed = query.trim();
     if (trimmed.length === 0) return;
-    onAdd({ name: trimmed, source: 'manual' });
+    onAdd({ name: trimmed, source: 'manual', kind: 'base' });
     reset();
     onClose();
   }

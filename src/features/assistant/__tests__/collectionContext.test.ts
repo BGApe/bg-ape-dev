@@ -1,14 +1,17 @@
+import { Copy } from '@/constants/copy';
 import type { CollectionGame } from '@/features/collection/types';
 import type { Play } from '@/features/plays/types';
 import type { GameId, PlayId, UserId } from '@/types';
 
 import {
   buildCollectionContext,
+  buildGameContext,
   detectActivityBias,
+  detectPlayerCount,
+  detectSetupDepth,
   estimateCollectionContextTokens,
   formatCollectionContextBlock,
 } from '../lib/collectionContext';
-
 function game(partial: Partial<CollectionGame> & { id: GameId; name: string }): CollectionGame {
   return {
     source: 'bgg',
@@ -111,5 +114,78 @@ describe('formatCollectionContextBlock / detectActivityBias', () => {
     expect(detectActivityBias('Prefer our frequently played favorites.')).toBe('favorites');
     expect(detectActivityBias('Prefer games we played recently.')).toBe('recent');
     expect(detectActivityBias('Help me pick a board game to play.')).toBe('none');
+  });
+});
+
+describe('buildGameContext / detectSetupDepth', () => {
+  const g1 = 'g1' as GameId;
+  const exp1 = 'exp1' as GameId;
+
+  it('builds metadata without play stats and keeps more tags', () => {
+    const item = buildGameContext(
+      game({
+        id: g1,
+        name: 'Dominion',
+        minPlayers: 2,
+        maxPlayers: 4,
+        playingTime: 30,
+        averageWeight: 2.34,
+        mechanics: [
+          'Deck, Bag, and Pool Building',
+          'Hand Management',
+          'Take That',
+          'Extra',
+          'Five',
+          'Six',
+          'Seven',
+          'Eight',
+          'Nine',
+        ],
+        categories: ['Card Game', 'Medieval', 'A', 'B', 'C', 'D', 'E', 'F', 'G'],
+      }),
+    );
+    expect(item).toEqual({
+      name: 'Dominion',
+      minPlayers: 2,
+      maxPlayers: 4,
+      playingTime: 30,
+      averageWeight: 2.3,
+      mechanics: [
+        'Deck, Bag, and Pool Building',
+        'Hand Management',
+        'Take That',
+        'Extra',
+        'Five',
+        'Six',
+        'Seven',
+        'Eight',
+      ],
+      categories: ['Card Game', 'Medieval', 'A', 'B', 'C', 'D', 'E', 'F'],
+    });
+    expect(item).not.toHaveProperty('playCount');
+    expect(item).not.toHaveProperty('daysSinceLastPlay');
+  });
+
+  it('returns null for expansions', () => {
+    expect(
+      buildGameContext(
+        game({ id: exp1, name: 'Dominion: Intrigue', kind: 'expansion', parentBggId: 36218 }),
+      ),
+    ).toBeNull();
+  });
+
+  it('detects setup depth phrases from the intent prompt', () => {
+    const depth = Copy.intent.quickSetup.promptParts.depth;
+    expect(detectSetupDepth(depth['quick']!)).toBe('quick');
+    expect(detectSetupDepth(depth['basic']!)).toBe('basic');
+    expect(detectSetupDepth(depth['full']!)).toBe('full');
+    expect(detectSetupDepth('Quick setup guide for Dominion.')).toBeUndefined();
+  });
+
+  it('detects player count from game-picker and setup prompt phrases', () => {
+    expect(detectPlayerCount(Copy.intent.gamePicker.promptParts.players('4'))).toBe('4');
+    expect(detectPlayerCount(Copy.intent.quickSetup.promptParts.players('6+'))).toBe('6+');
+    expect(detectPlayerCount("We'll be 3 players.")).toBe('3');
+    expect(detectPlayerCount('Quick setup guide for Dominion.')).toBeUndefined();
   });
 });

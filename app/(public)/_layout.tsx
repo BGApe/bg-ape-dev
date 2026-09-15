@@ -10,7 +10,7 @@ export default function PublicLayout(): React.JSX.Element | null {
   const { status } = useAuthSession();
 
   if (status === 'loading') return null;
-  if (status === 'authenticated') return <Redirect href="/(app)" />;
+  if (status === 'authenticated') return <Redirect href="/(app)/(tabs)" />;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

@@ -1,60 +1,31 @@
-import { Redirect, Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Redirect, Stack } from 'expo-router';
+import type React from 'react';
 
-import { Copy } from '@/constants/copy';
 import { useAuthSession } from '@/features/auth/hooks/useAuthSession';
+import { useEnsureSelfPlayer } from '@/features/players/hooks/useEnsureSelfPlayer';
 
 /**
  * Authenticated route group. Redirects to login if the user is not signed in.
- * All children of this group receive a guaranteed non-null session via useAuthSession().
+ * Uses a Stack so that screens like game / plays / player are properly pushed
+ * on top of the tab bar and pressing back returns to the originating tab.
  */
 export default function AppLayout(): React.JSX.Element | null {
   const { status } = useAuthSession();
+  useEnsureSelfPlayer();
 
   if (status === 'loading') return null;
   if (status === 'unauthenticated') return <Redirect href="/(public)/login" />;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: { backgroundColor: '#0F0F0F', borderTopColor: '#2A2A2A' },
-        tabBarActiveTintColor: '#818CF8',
-        tabBarInactiveTintColor: '#525252',
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: Copy.tabs.home,
-          tabBarIcon: ({ size }: { size: number }) => <Text style={{ fontSize: size }}>🏠</Text>,
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: Copy.tabs.chat,
-          tabBarIcon: ({ size }: { size: number }) => <Text style={{ fontSize: size }}>💬</Text>,
-        }}
-      />
-      <Tabs.Screen
-        name="collection"
-        options={{
-          title: Copy.tabs.collection,
-          tabBarIcon: ({ size }: { size: number }) => <Text style={{ fontSize: size }}>🎲</Text>,
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: Copy.tabs.account,
-          tabBarIcon: ({ size }: { size: number }) => <Text style={{ fontSize: size }}>👤</Text>,
-        }}
-      />
-      <Tabs.Screen name="stats" options={{ tabBarItemStyle: { display: 'none' } }} />
-      <Tabs.Screen name="plays" options={{ tabBarItemStyle: { display: 'none' } }} />
-      <Tabs.Screen name="game" options={{ tabBarItemStyle: { display: 'none' } }} />
-      <Tabs.Screen name="intent" options={{ tabBarItemStyle: { display: 'none' } }} />
-    </Tabs>
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* The (tabs) group renders the bottom tab bar */}
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      {/* Stack-only screens — no tab bar shown */}
+      <Stack.Screen name="game" options={{ headerShown: false }} />
+      <Stack.Screen name="plays" options={{ headerShown: false }} />
+      <Stack.Screen name="stats" options={{ headerShown: false }} />
+      <Stack.Screen name="intent" options={{ headerShown: false }} />
+      <Stack.Screen name="player" options={{ headerShown: false }} />
+    </Stack>
   );
 }

@@ -1,12 +1,14 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Copy } from '@/constants/copy';
 import type { CollectionGame } from '@/features/collection/types';
+import type { GameId } from '@/types';
 
 import { BggGameInput } from './BggGameInput';
 import { CollectionPicker } from './CollectionPicker';
+import type { IntentGameSelection } from './QuickSetupFilters';
 
 const C = Copy.intent.rulesHelper;
 
@@ -20,38 +22,91 @@ type State = {
   question: string;
 };
 
-const INITIAL: State = {
-  fromCollection: false,
-  selectedGameId: undefined,
-  gameName: '',
-  topics: [],
-  question: '',
-};
-
 type Props = {
   games: CollectionGame[];
   onPromptChange: (prompt: string) => void;
+  onContextChange?: (ctx: IntentGameSelection) => void;
+  /** Preselect a collection game (e.g. from game detail → Rules help). */
+  initialGameId?: GameId;
 };
+
+function resolveGameName(state: State, games: CollectionGame[]): string {
+  return state.fromCollection
+    ? (games.find((g) => g.id === state.selectedGameId)?.name ?? '')
+    : state.gameName.trim();
+}
 
 function buildPrompt(state: State, games: CollectionGame[]): string {
   const P = C.promptParts;
-  const gameName = state.fromCollection
-    ? (games.find((g) => g.id === state.selectedGameId)?.name ?? '')
-    : state.gameName.trim();
-
-  const parts: string[] = [P.intro(gameName)];
+  const parts: string[] = [P.intro(resolveGameName(state, games))];
   if (state.topics.length > 0) parts.push(P.topics(state.topics as string[]));
   if (state.question.trim()) parts.push(P.question(state.question.trim()));
   return parts.join(' ');
 }
 
-export function RulesFilters({ games, onPromptChange }: Props): React.JSX.Element {
-  const [state, setState] = useState<State>(INITIAL);
+function selectionFromState(state: State, games: CollectionGame[]): IntentGameSelection {
+  if (state.fromCollection && state.selectedGameId) {
+    const game = games.find((g) => g.id === state.selectedGameId);
+    if (game) return { gameId: game.id, gameName: game.name };
+  }
+  const name = state.gameName.trim();
+  if (!state.fromCollection && name) return { gameName: name };
+  return {};
+}
+
+export function RulesFilters({
+  games,
+  onPromptChange,
+  onContextChange,
+  initialGameId,
+}: Props): React.JSX.Element {
+  const baseGames = useMemo(() => games.filter((g) => g.kind !== 'expansion'), [games]);
+
+  const [state, setState] = useState<State>(() => {
+    if (initialGameId) {
+      return {
+        fromCollection: true,
+        selectedGameId: initialGameId,
+        gameName: '',
+        topics: [],
+        question: '',
+      };
+    }
+    return {
+      fromCollection: false,
+      selectedGameId: undefined,
+      gameName: '',
+      topics: [],
+      question: '',
+    };
+  });
+
+  const onPromptChangeRef = useRef(onPromptChange);
+  const onContextChangeRef = useRef(onContextChange);
+  const didSyncPreselect = useRef(false);
+  onPromptChangeRef.current = onPromptChange;
+  onContextChangeRef.current = onContextChange;
+
+  useEffect(() => {
+    if (!initialGameId || didSyncPreselect.current) return;
+    if (!baseGames.some((g) => g.id === initialGameId)) return;
+    didSyncPreselect.current = true;
+    const preselected: State = {
+      fromCollection: true,
+      selectedGameId: initialGameId,
+      gameName: '',
+      topics: [],
+      question: '',
+    };
+    onPromptChangeRef.current(buildPrompt(preselected, baseGames));
+    onContextChangeRef.current?.(selectionFromState(preselected, baseGames));
+  }, [baseGames, initialGameId]);
 
   function update(patch: Partial<State>) {
     const next = { ...state, ...patch };
     setState(next);
-    onPromptChange(buildPrompt(next, games));
+    onPromptChange(buildPrompt(next, baseGames));
+    onContextChange?.(selectionFromState(next, baseGames));
   }
 
   function toggleTopic(topic: Topic) {
@@ -84,7 +139,7 @@ export function RulesFilters({ games, onPromptChange }: Props): React.JSX.Elemen
       <View className="mb-4">
         {state.fromCollection ? (
           <CollectionPicker
-            games={games}
+            games={baseGames}
             selectedId={state.selectedGameId}
             onSelect={(id) => update({ selectedGameId: id })}
           />

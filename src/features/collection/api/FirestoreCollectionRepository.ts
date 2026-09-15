@@ -3,7 +3,13 @@ import { logger } from '@/services/logger';
 import type { GameId, UserId } from '@/types';
 
 import { CollectionGameSchema } from '../schemas';
-import type { CollectionGame, CollectionGamePatch, GameSource, NewCollectionGame } from '../types';
+import type {
+  CollectionGame,
+  CollectionGamePatch,
+  GameKind,
+  GameSource,
+  NewCollectionGame,
+} from '../types';
 
 import type { CollectionRepository } from './CollectionRepository';
 
@@ -13,7 +19,10 @@ type RawGame = {
   name: string;
   source: GameSource;
   addedAt: number;
+  kind?: GameKind | undefined;
   bggId?: number | undefined;
+  parentBggId?: number | undefined;
+  bggExpansionCount?: number | undefined;
   yearPublished?: number | undefined;
   thumbnailUrl?: string | undefined;
   language?: string | undefined;
@@ -24,6 +33,8 @@ type RawGame = {
   bggRating?: number | undefined;
   bggRank?: number | undefined;
   notes?: string | undefined;
+  categories?: string[] | undefined;
+  mechanics?: string[] | undefined;
 };
 
 const USERS = 'users';
@@ -49,8 +60,11 @@ function toGame(data: RawGame): CollectionGame {
     name: data.name,
     source: data.source,
     addedAt: data.addedAt,
+    kind: data.kind ?? 'base',
   };
   if (data.bggId !== undefined) game.bggId = data.bggId;
+  if (data.parentBggId !== undefined) game.parentBggId = data.parentBggId;
+  if (data.bggExpansionCount !== undefined) game.bggExpansionCount = data.bggExpansionCount;
   if (data.yearPublished !== undefined) game.yearPublished = data.yearPublished;
   if (data.thumbnailUrl !== undefined) game.thumbnailUrl = data.thumbnailUrl;
   if (data.language !== undefined) game.language = data.language;
@@ -61,6 +75,8 @@ function toGame(data: RawGame): CollectionGame {
   if (data.bggRating !== undefined) game.bggRating = data.bggRating;
   if (data.bggRank !== undefined) game.bggRank = data.bggRank;
   if (data.notes !== undefined) game.notes = data.notes;
+  if (data.categories !== undefined) game.categories = data.categories;
+  if (data.mechanics !== undefined) game.mechanics = data.mechanics;
   return game;
 }
 

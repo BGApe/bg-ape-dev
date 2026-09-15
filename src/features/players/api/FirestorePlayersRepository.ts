@@ -12,6 +12,7 @@ type RawPlayer = {
   userId: UserId;
   name: string;
   nickname?: string | undefined;
+  isSelf?: boolean | undefined;
   createdAt: number;
 };
 
@@ -38,6 +39,7 @@ function toPlayer(data: RawPlayer): Player {
     createdAt: data.createdAt,
   };
   if (data.nickname !== undefined) player.nickname = data.nickname;
+  if (data.isSelf !== undefined) player.isSelf = data.isSelf;
   return player;
 }
 

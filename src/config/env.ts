@@ -10,6 +10,12 @@ const envSchema = z.object({
    * Store in .env.local (gitignored) — never commit to version control.
    */
   EXPO_PUBLIC_BGG_TOKEN: z.string().uuid().optional(),
+  /**
+   * Firebase App Check debug UUID for local Android/iOS builds.
+   * Register the same UUID in Firebase Console → App Check → Manage debug tokens.
+   * Store in .env.development.local (gitignored).
+   */
+  EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN: z.string().uuid().optional(),
 });
 
 /**
@@ -20,6 +26,7 @@ export const env = envSchema.parse({
   EXPO_PUBLIC_ENV: process.env['EXPO_PUBLIC_ENV'],
   EXPO_PUBLIC_SENTRY_DSN: process.env['EXPO_PUBLIC_SENTRY_DSN'],
   EXPO_PUBLIC_BGG_TOKEN: process.env['EXPO_PUBLIC_BGG_TOKEN'],
+  EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN: process.env['EXPO_PUBLIC_APPCHECK_DEBUG_TOKEN'],
 });
 
 export type Env = z.infer<typeof envSchema>;

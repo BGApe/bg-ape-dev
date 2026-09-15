@@ -14,6 +14,9 @@ export type ConversationHistoryLevel = 'minimal' | 'optimal' | 'maximal';
  */
 export type ActivityBias = 'none' | 'undereplayed' | 'favorites' | 'recent';
 
+/** How deep a quick-setup answer should go (detected from prompt phrases). */
+export type SetupDepth = 'quick' | 'basic' | 'full';
+
 /** Compact per-game snapshot for the assistant (never send full CollectionGame docs). */
 export type CollectionGameContextItem = {
   name: string;
@@ -48,6 +51,13 @@ export type AssistantRequest = {
   collectionContext?: CollectionGameContextItem[];
   /** How to weigh play history when suggesting games. */
   activityBias?: ActivityBias;
+  /**
+   * Single-game metadata for setup/rules threads (collection games only).
+   * When omitted, the model uses a default/simplest-setup fallback.
+   */
+  gameContext?: CollectionGameContextItem;
+  /** Setup depth — setup threads only; omitted when not detected in the prompt. */
+  setupDepth?: SetupDepth;
   /** Prior messages in this thread (optimal = last 6). */
   recentMessages?: AssistantHistoryMessage[];
 };

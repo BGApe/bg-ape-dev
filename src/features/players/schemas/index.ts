@@ -5,12 +5,14 @@ export const PlayerSchema = z.object({
   userId: z.string().min(1),
   name: z.string().min(1),
   nickname: z.string().optional(),
+  isSelf: z.boolean().optional(),
   createdAt: z.number(),
 });
 
 export const NewPlayerSchema = z.object({
   name: z.string().trim().min(1, 'Name is required.').max(60),
   nickname: z.string().trim().max(40).optional(),
+  isSelf: z.boolean().optional(),
 });
 
 export type PlayerInput = z.infer<typeof NewPlayerSchema>;

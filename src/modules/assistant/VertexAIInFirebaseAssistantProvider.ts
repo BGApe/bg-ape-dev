@@ -21,6 +21,8 @@ function cacheKey(request: AssistantRequest): string {
     threadReason: request.threadReason,
     isFirstMessage: request.isFirstMessage,
     activityBias: request.activityBias ?? 'none',
+    setupDepth: request.setupDepth ?? null,
+    game: request.gameContext?.name ?? null,
     collection: request.collectionContext?.map((g) => g.name) ?? [],
     history: request.recentMessages?.map((m) => `${m.role}:${m.content.slice(0, 40)}`) ?? [],
   });

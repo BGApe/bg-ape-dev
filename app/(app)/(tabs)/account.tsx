@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import {
   ActivityIndicator,
@@ -19,6 +19,8 @@ import { useUserProfileQuery } from '@/features/account/hooks/useUserProfileQuer
 import { UpdateProfileSchema } from '@/features/account/schemas';
 import type { UpdateProfileInput } from '@/features/account/schemas';
 import { useSignOut } from '@/features/auth/hooks/useSignOut';
+import { useEnsureSelfPlayer } from '@/features/players/hooks/useEnsureSelfPlayer';
+import { useUpdatePlayer } from '@/features/players/hooks/useUpdatePlayer';
 import { mapError } from '@/lib/mapError';
 
 const INTEGRATIONS = ['BG Stats', 'BoardGameGeek', 'Messenger', 'Gmail'];
@@ -27,7 +29,10 @@ export default function AccountScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { data: profile, isLoading } = useUserProfileQuery();
   const updateProfile = useUpdateProfile();
+  const self = useEnsureSelfPlayer();
+  const updatePlayer = useUpdatePlayer();
   const signOut = useSignOut();
+  const [selfName, setSelfName] = useState(self?.name ?? 'Me');
 
   const {
     control,
@@ -45,8 +50,18 @@ export default function AccountScreen(): React.JSX.Element {
     }
   }, [profile, reset]);
 
+  useEffect(() => {
+    if (self !== undefined) setSelfName(self.name);
+  }, [self]);
+
   function onSave(data: UpdateProfileInput) {
     updateProfile.mutate(data);
+  }
+
+  function handleSelfNameBlur() {
+    const trimmed = selfName.trim();
+    if (self === undefined || trimmed.length === 0 || trimmed === self.name) return;
+    updatePlayer.mutate({ playerId: self.id, patch: { name: trimmed } });
   }
 
   const saveError = updateProfile.error ? mapError(updateProfile.error) : null;
@@ -123,6 +138,23 @@ export default function AccountScreen(): React.JSX.Element {
           {errors.gamingNick !== undefined && (
             <Text className="mt-1 text-xs text-red-400">{errors.gamingNick.message}</Text>
           )}
+        </View>
+
+        <View className="mb-6">
+          <Text className="mb-2 text-sm font-medium text-neutral-400">
+            {Copy.account.selfPlayerLabel}
+          </Text>
+          <TextInput
+            className="rounded-xl bg-[#1F1F1F] px-4 py-3 text-sm text-[#F9F9F9]"
+            placeholder={Copy.account.selfPlayerPlaceholder}
+            placeholderTextColor="#525252"
+            value={selfName}
+            onChangeText={setSelfName}
+            onBlur={handleSelfNameBlur}
+            autoCapitalize="words"
+            returnKeyType="done"
+          />
+          <Text className="mt-1 text-xs text-neutral-500">{Copy.account.selfPlayerHint}</Text>
         </View>
 
         {saveError !== null && (

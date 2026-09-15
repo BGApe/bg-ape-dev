@@ -24,6 +24,8 @@ export const AssistantRequestSchema = z.object({
   isFirstMessage: z.boolean(),
   collectionContext: z.array(CollectionGameContextItemSchema).max(80).optional(),
   activityBias: z.enum(['none', 'undereplayed', 'favorites', 'recent']).optional(),
+  gameContext: CollectionGameContextItemSchema.optional(),
+  setupDepth: z.enum(['quick', 'basic', 'full']).optional(),
   recentMessages: z.array(AssistantHistoryMessageSchema).max(20).optional(),
 });
 

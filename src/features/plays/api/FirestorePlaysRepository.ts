@@ -31,6 +31,8 @@ type RawPlay = {
   gameCategories?: string[] | undefined;
   gameMechanics?: string[] | undefined;
   gameWeight?: number | undefined;
+  expansionIds?: GameId[] | undefined;
+  expansionNames?: string[] | undefined;
 };
 
 const USERS = 'users';
@@ -73,6 +75,8 @@ function toPlay(data: RawPlay): Play {
   if (data.gameCategories !== undefined) play.gameCategories = data.gameCategories;
   if (data.gameMechanics !== undefined) play.gameMechanics = data.gameMechanics;
   if (data.gameWeight !== undefined) play.gameWeight = data.gameWeight;
+  if (data.expansionIds !== undefined) play.expansionIds = data.expansionIds;
+  if (data.expansionNames !== undefined) play.expansionNames = data.expansionNames;
   return play;
 }
 
@@ -97,6 +101,7 @@ export const firestorePlaysRepository: PlaysRepository = {
           userId: parsed.data.userId as UserId,
           gameId: parsed.data.gameId as GameId | undefined,
           locationId: parsed.data.locationId as LocationId | undefined,
+          expansionIds: parsed.data.expansionIds as GameId[] | undefined,
           participants: parsed.data.participants?.map((p) => ({
             ...p,
             playerId: p.playerId as PlayerId,

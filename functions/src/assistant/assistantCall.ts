@@ -7,6 +7,7 @@ import {
   buildSystemPrompt,
   formatCollectionContextForModel,
   formatConversationHistoryForModel,
+  formatGameContextForModel,
 } from './prompts';
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
@@ -14,6 +15,7 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 type ChatIntent = 'recommendation' | 'quick_guide' | 'generic';
 type ChatReason = 'recommendation' | 'setup' | 'rules' | 'general';
 type ActivityBias = 'none' | 'undereplayed' | 'favorites' | 'recent';
+type SetupDepth = 'quick' | 'basic' | 'full';
 
 type CollectionGameContextItem = {
   name: string;
@@ -39,6 +41,8 @@ type AssistantCallRequest = {
   isFirstMessage: boolean;
   collectionContext?: CollectionGameContextItem[];
   activityBias?: ActivityBias;
+  gameContext?: CollectionGameContextItem;
+  setupDepth?: SetupDepth;
   recentMessages?: HistoryMessage[];
 };
 
@@ -65,6 +69,7 @@ const RESPONSE_SCHEMA: ObjectSchema = {
 const VALID_INTENTS: ChatIntent[] = ['recommendation', 'quick_guide', 'generic'];
 const VALID_REASONS: ChatReason[] = ['recommendation', 'setup', 'rules', 'general'];
 const VALID_BIAS: ActivityBias[] = ['none', 'undereplayed', 'favorites', 'recent'];
+const VALID_SETUP_DEPTH: SetupDepth[] = ['quick', 'basic', 'full'];
 const VALID_HISTORY_ROLES = ['user', 'assistant'] as const;
 
 function parseCollectionItem(raw: unknown): CollectionGameContextItem | null {
@@ -152,6 +157,24 @@ function validateRequest(data: unknown): AssistantCallRequest {
     result.activityBias = d['activityBias'] as ActivityBias;
   }
 
+  if (d['gameContext'] !== undefined) {
+    const parsed = parseCollectionItem(d['gameContext']);
+    if (parsed === null) {
+      throw new HttpsError('invalid-argument', '"gameContext" must be a valid game object with a name.');
+    }
+    result.gameContext = parsed;
+  }
+
+  if (d['setupDepth'] !== undefined) {
+    if (!VALID_SETUP_DEPTH.includes(d['setupDepth'] as SetupDepth)) {
+      throw new HttpsError(
+        'invalid-argument',
+        `"setupDepth" must be one of: ${VALID_SETUP_DEPTH.join(', ')}.`,
+      );
+    }
+    result.setupDepth = d['setupDepth'] as SetupDepth;
+  }
+
   if (d['recentMessages'] !== undefined) {
     if (!Array.isArray(d['recentMessages'])) {
       throw new HttpsError('invalid-argument', '"recentMessages" must be an array.');
@@ -175,6 +198,10 @@ function buildUserContent(payload: AssistantCallRequest): string {
   if (historyBlock) parts.push(historyBlock);
 
   parts.push(`Current message:\n${payload.text}`);
+
+  if (payload.gameContext) {
+    parts.push(formatGameContextForModel(payload.gameContext));
+  }
 
   const collectionBlock = formatCollectionContextForModel(
     payload.collectionContext ?? [],
@@ -200,7 +227,7 @@ export const assistantCall = onCall(
     const payload = validateRequest(request.data);
     const userContent = buildUserContent(payload);
 
-    // Soft guard: history (optimal ~6 msgs) + collection + current text.
+    // Soft guard: history (optimal ~6 msgs) + collection/game context + current text.
     if (userContent.length > 10_000) {
       throw new HttpsError(
         'invalid-argument',
@@ -210,20 +237,36 @@ export const assistantCall = onCall(
 
     const genAI = new GoogleGenerativeAI(geminiApiKey.value());
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      systemInstruction: buildSystemPrompt(payload.threadReason, payload.isFirstMessage),
+      model: 'gemini-3.5-flash',
+      systemInstruction: buildSystemPrompt(payload.threadReason, payload.isFirstMessage, {
+        setupDepth: payload.setupDepth,
+        hasGameContext: payload.gameContext !== undefined,
+      }),
+      // Gemini 3.x thinking tokens count against maxOutputTokens. Default
+      // thinking with 1024 max cut JSON mid-string (MAX_TOKENS). Keep thinking
+      // minimal for structured replies and leave room for the payload.
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0.7,
-        maxOutputTokens: 1_024,
+        maxOutputTokens: 4_096,
+        // SDK types lag behind Gemini 3 thinkingConfig; cast keeps the call site typed.
+        ...({ thinkingConfig: { thinkingLevel: 'MINIMAL' } } as object),
       },
     });
 
     let raw: string;
+    let finishReason: string | undefined;
     try {
       const result = await model.generateContent(userContent);
-      raw = result.response.text();
+      const candidate = result.response.candidates?.[0];
+      finishReason = candidate?.finishReason;
+      const parts = candidate?.content?.parts ?? [];
+      raw = parts
+        .filter((p) => !('thought' in p && (p as { thought?: boolean }).thought === true))
+        .map((p) => ('text' in p && typeof p.text === 'string' ? p.text : ''))
+        .join('');
+      if (!raw) raw = result.response.text();
     } catch (err) {
       console.error('[assistantCall] Gemini API error:', err);
       throw new HttpsError('internal', 'The assistant is temporarily unavailable. Please try again.');
@@ -233,7 +276,11 @@ export const assistantCall = onCall(
     try {
       parsed = JSON.parse(raw);
     } catch {
-      console.error('[assistantCall] Failed to parse Gemini JSON response:', raw);
+      console.error('[assistantCall] Failed to parse Gemini JSON response:', {
+        finishReason,
+        preview: raw.slice(0, 400),
+        length: raw.length,
+      });
       throw new HttpsError('internal', 'Received an unexpected response from the assistant.');
     }
 

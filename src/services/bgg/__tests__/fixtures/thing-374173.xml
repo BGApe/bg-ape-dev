@@ -1,0 +1,648 @@
+<?xml version="1.0" encoding="utf-8"?><items termsofuse="https://boardgamegeek.com/xmlapi/termsofuse"><item type="boardgame" id="374173">
+         <thumbnail>https://cf.geekdo-images.com/U6scsOGrPtVym4nCLaYjyw__small/img/0kgu-vLB9MQStlEyaR6bgKkemAQ=/fit-in/200x150/filters:strip_icc()/pic7387735.png</thumbnail>
+      <image>https://cf.geekdo-images.com/U6scsOGrPtVym4nCLaYjyw__original/img/bPFq87JbA919A2vxks_PFF2DwsY=/0x0/filters:format(png)/pic7387735.png</image>
+   	                                  				
+				<name type="primary" sortindex="1" value="Star Wars: The Deckbuilding Game" />
+			
+						                               				
+				<name type="alternate" sortindex="1" value="Star Wars: A pakliépítő játék" />
+			    				
+				<name type="alternate" sortindex="1" value="Зоряні війни. Колодобудівна гра" />
+			    				
+				<name type="alternate" sortindex="1" value="Междузвездни войни: Игра с карти" />
+			    				
+				<name type="alternate" sortindex="1" value="星球大战：牌库构筑游戏" />
+			    				
+				<name type="alternate" sortindex="1" value="스타워즈: 덱빌딩 게임" />
+			
+						               													<description>The Rebel Alliance fights valiantly against the tyranny of the Galactic Empire. Each new victory brings the Rebels hope, and each heroic sacrifice strengthens their resolve. Still, the Empire's resources are vast, and the firepower of its Empire Navy is unmatched. With neither side willing to accept defeat, their war rages across the galaxy...
+
+In Star Wars: The Deckbuilding Game, a head-to-head game for two players, the galaxy-spanning war between the Galactic Empire and the Rebel Alliance comes alive on your tabletop. In this easy-to-learn game, you and your opponent each choose a side, playing as either the Empire or the Rebels, and as the game progresses you both strengthen the power of your starting decks and work to destroy each other's bases. The first player to destroy three of their opponent's bases wins.
+
+In more detail, each player starts with a unique ten-card deck, with seven of those cards providing only resources to acquire new cards. Six cards from a galaxy deck are always on display, with Rebel cards facing the Rebel player, Empire cards the Empire player, and neutral cards turned sideways. You can spend resources to acquire cards in the galaxy row that don't belong to the opponent, and you can use attack power to take out cards that do belong to them, gaining a reward in the process.
+
+Each player starts with a base that lacks abilities (Dantooine for the Rebels and Lothal for the Empire), but when that base is destroyed, you get to choose a replacement from your base deck, with each base having a special ability. Choose wisely to counter your opponent's plans! In addition to having special abilities, capital ships absorb damage meant for your base.
+
+Players also fight for control of a Force track to gain additional resources or make use of "If the Force is with you..." abilities on their cards.
+
+</description>
+										      	               				<yearpublished value="2023" />
+						               				<minplayers value="2" />
+						               				<maxplayers value="2" />
+						      			<poll name="suggested_numplayers" title="User Suggested Number of Players" totalvotes="154">
+			
+		<results numplayers="1">		
+					<result value="Best" numvotes="12" />
+					<result value="Recommended" numvotes="44" />
+					<result value="Not Recommended" numvotes="68" />
+				</results>					
+			
+		<results numplayers="2">		
+					<result value="Best" numvotes="139" />
+					<result value="Recommended" numvotes="6" />
+					<result value="Not Recommended" numvotes="0" />
+				</results>					
+			
+		<results numplayers="2+">		
+					<result value="Best" numvotes="3" />
+					<result value="Recommended" numvotes="2" />
+					<result value="Not Recommended" numvotes="89" />
+				</results>					
+	</poll>
+<poll-summary name="suggested_numplayers"  title="User Suggested Number of Players">
+  <result name="bestwith" value="Best with 2 players" />
+  <result name="recommmendedwith" value="Recommended with 2 players" />
+</poll-summary> 			               				<playingtime value="90" />
+						               				<minplaytime value="30" />
+						               				<maxplaytime value="90" />
+						               				<minage value="12" />
+						      			<poll name="suggested_playerage" title="User Suggested Player Age" totalvotes="60">
+			<results>		
+					<result value="2" numvotes="0" />
+					<result value="3" numvotes="0" />
+					<result value="4" numvotes="0" />
+					<result value="5" numvotes="1" />
+					<result value="6" numvotes="1" />
+					<result value="8" numvotes="23" />
+					<result value="10" numvotes="30" />
+					<result value="12" numvotes="5" />
+					<result value="14" numvotes="0" />
+					<result value="16" numvotes="0" />
+					<result value="18" numvotes="0" />
+					<result value="21 and up" numvotes="0" />
+				</results>					
+	</poll> 			      			<poll name="language_dependence" title="Language Dependence" totalvotes="17">
+			
+		<results>		
+					<result level="1" value="No necessary in-game text" numvotes="0" />
+					<result level="2" value="Some necessary text - easily memorized or small crib sheet" numvotes="1" />
+					<result level="3" value="Moderate in-game text - needs crib sheet or paste ups" numvotes="6" />
+					<result level="4" value="Extensive use of text - massive conversion needed to be playable" numvotes="7" />
+					<result level="5" value="Unplayable in another language" numvotes="3" />
+				</results>					
+	</poll> 			      			 			      				
+		 			
+
+			
+		
+					<link type="boardgamecategory" id="1002" value="Card Game" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamecategory" id="1046" value="Fighting" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamecategory" id="1064" value="Movies / TV / Radio theme" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamecategory" id="1016" value="Science Fiction" />
+		
+									
+			
+
+			      				
+		 			
+
+			
+		
+					<link type="boardgamemechanic" id="2664" value="Deck, Bag, and Pool Building" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamemechanic" id="2041" value="Open Drafting" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamemechanic" id="2888" value="Tug of War" />
+		
+									
+			
+
+			      				
+		 			
+
+			
+		
+					<link type="boardgamefamily" id="109863" value="Mechanism: Pure Deckbuilding" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamefamily" id="5602" value="Movies: Star Wars" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamefamily" id="61979" value="Players: Two-Player Only Games" />
+		
+									
+			
+
+			      				
+		 			
+
+			
+		
+					<link type="boardgameexpansion" id="453918" value="Star Wars: The Deckbuilding Game – Mandalorian Faction Pack" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameexpansion" id="469673" value="Star Wars: The Deckbuilding Game – Rebels &amp; Empire Reinforcements Expansion" />
+		
+									
+			
+
+			      			
+
+			      				
+		 			
+
+			
+		
+					<link type="boardgameaccessory" id="477920" value="Star Wars: The Deckbuilding Game – AMAPrint3D Insert" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameaccessory" id="395796" value="Star Wars: The Deckbuilding Game – Board Bento Organizer" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameaccessory" id="477296" value="Star Wars: The Deckbuilding Game – Gen Con 2026 Foil Promos" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameaccessory" id="401542" value="Star Wars: The Deckbuilding Game – Playmaty Rubber Mat" />
+		
+									
+			
+
+			      				
+		 			
+
+			
+		
+					<link type="boardgameintegration" id="422332" value="Star Wars: The Deckbuilding Game – Clone Wars Edition" />
+		
+									
+			
+
+			      			
+
+			      			
+
+			      			
+
+			      			
+
+			      	      	      				
+		 			
+
+			
+		
+					<link type="boardgamedesigner" id="69895" value="Caleb Grace" />
+		
+									
+			
+
+			      				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="41638" value="Jake Murray" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="32122" value="David Ardila" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="47502" value="Borja Pindado Arribas" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="59605" value="Cristi Balanescu" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="19822" value="Tiziano Baracchi" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="87365" value="Colin Boyer" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="21426" value="Matt Bradbury" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="65000" value="Mark Bulahao" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="72509" value="Rovina Cai" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="67030" value="J. B. Casacop" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="29808" value="Alexandre Dainche" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="75483" value="Anthony Devine" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="77084" value="Alexandr Elichev" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="18700" value="Mariusz Gandzel" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="95118" value="Sergey Glushakov" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="79335" value="Steven Hamilton" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="69246" value="Joel Hustak" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="149235" value="Imaginary Studios" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="18654" value="Nick Ingeneri" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="36621" value="Michal Ivan" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="12019" value="Tomasz Jedruszek" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="14590" value="Jason Juta" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="105737" value="Alex Kim" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="53444" value="Leonid Kozienko" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="14715" value="Raven Mimura" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="44813" value="Mark Molnar" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="59149" value="Ameen Naksewee" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="104761" value="Vlad Ricean" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="48601" value="Adam Schumpert" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="77085" value="Stephen Somers" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="69091" value="Darren Tan" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="68942" value="Ryan Valle" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="29809" value="Magali Villeneuve" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="68133" value="Andreas Zafiratos" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgameartist" id="49280" value="Ben Zweifel" />
+		
+									
+			
+
+			      	      				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="17" value="Fantasy Flight Games" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="23043" value="ADC Blackfire Entertainment" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="50565" value="Bluebird Games" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="50696" value="CoolPlay" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="6194" value="Delta Vision Publishing" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="15605" value="Galápagos Jogos" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="58739" value="Geekach LLC" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="28415" value="GoKids 玩樂小子" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="46431" value="MTS Games" />
+		
+									
+				
+		 			
+
+			
+		
+					<link type="boardgamepublisher" id="7466" value="Rebel Sp. z o.o." />
+		
+									
+			
+
+			
+	
+
+	
+
+	
+	
+	
+   		<statistics page="1">
+								<ratings >
+			<usersrated value="11338" />
+			<average value="7.81401" />
+			<bayesaverage value="7.3468" />
+
+			<ranks>
+															<rank type="subtype" id="1" name="boardgame" friendlyname="Board Game Rank" value="218" bayesaverage="7.3468" />
+																				<rank type="family" id="5497" name="strategygames" friendlyname="Strategy Game Rank" value="153" bayesaverage="7.39761" />
+												</ranks>
+
+			<stddev value="1.17552" />
+			<median value="0" />
+			<owned value="24427" />
+			<trading value="225" />
+			<wanting value="238" />
+			<wishing value="2884" />
+			<numcomments value="1622" />
+			<numweights value="257" />
+			<averageweight value="2.0506" />
+			</ratings>
+								</statistics>
+     
+	
+          
+</item></items>

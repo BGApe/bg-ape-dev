@@ -29,6 +29,8 @@ export const PlaySchema = z.object({
   gameCategories: z.array(z.string()).optional(),
   gameMechanics: z.array(z.string()).optional(),
   gameWeight: z.number().optional(),
+  expansionIds: z.array(z.string()).optional(),
+  expansionNames: z.array(z.string()).optional(),
   createdAt: z.number(),
 });
 

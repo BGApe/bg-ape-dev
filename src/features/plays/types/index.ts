@@ -57,6 +57,10 @@ export type Play = {
   gameCategories?: string[];
   gameMechanics?: string[];
   gameWeight?: number;
+  /** Owned expansions used in this session (ids from collection). */
+  expansionIds?: GameId[];
+  /** Denormalized expansion names for display. */
+  expansionNames?: string[];
   createdAt: number;
 };
 
@@ -74,10 +78,13 @@ export type NewPlay = {
   gameCategories?: string[];
   gameMechanics?: string[];
   gameWeight?: number;
+  expansionIds?: GameId[];
+  expansionNames?: string[];
 };
 
 export type PlayPatch = {
   gameName?: string;
+  gameId?: GameId;
   playedAt?: number;
   locationId?: LocationId;
   locationName?: string;
@@ -86,4 +93,6 @@ export type PlayPatch = {
   playerCount?: number;
   durationMinutes?: number;
   note?: string;
+  expansionIds?: GameId[];
+  expansionNames?: string[];
 };

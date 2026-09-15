@@ -2,7 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import type React from 'react';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AskBar } from '@/components/AskBar';
@@ -25,8 +25,15 @@ export default function PlaysScreen(): React.JSX.Element {
   const deletePlay = useDeletePlay();
 
   const [isLogging, setIsLogging] = useState(false);
+  const [editingPlay, setEditingPlay] = useState<Play | null>(null);
 
   function handleSubmit(input: NewPlay) {
+    if (editingPlay !== null) {
+      const playId = editingPlay.id;
+      setEditingPlay(null);
+      updatePlay.mutate({ playId, play: input });
+      return;
+    }
     setIsLogging(false);
     logPlay.mutate(input);
   }
@@ -47,22 +54,26 @@ export default function PlaysScreen(): React.JSX.Element {
       <AskBar />
 
       <View className="flex-row items-center gap-2 px-3 pb-2 pt-1">
-        <TouchableOpacity
+        <Pressable
           onPress={() => router.back()}
           className="px-2 py-1"
           accessibilityRole="button"
           accessibilityLabel={Copy.tabs.home}
+          hitSlop={8}
         >
           <Text className="text-lg text-neutral-300">‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text className="flex-1 text-lg font-bold text-[#F9F9F9]">{Copy.plays.title}</Text>
-        <TouchableOpacity
-          onPress={() => setIsLogging(true)}
+        <Pressable
+          onPress={() => {
+            setEditingPlay(null);
+            setIsLogging(true);
+          }}
           accessibilityRole="button"
           className="rounded-full bg-[#6D5DF6] px-3 py-1.5"
         >
           <Text className="text-sm font-semibold text-white">{Copy.plays.logButton}</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -78,7 +89,12 @@ export default function PlaysScreen(): React.JSX.Element {
           data={plays}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <PlayRow play={item} onSaveNote={handleSaveNote} onDelete={handleDelete} />
+            <PlayRow
+              play={item}
+              onSaveNote={handleSaveNote}
+              onDelete={handleDelete}
+              onEdit={(play) => setEditingPlay(play)}
+            />
           )}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 16 }}
           keyboardShouldPersistTaps="handled"
@@ -86,8 +102,12 @@ export default function PlaysScreen(): React.JSX.Element {
       )}
 
       <LogPlaySheet
-        visible={isLogging}
-        onClose={() => setIsLogging(false)}
+        visible={isLogging || editingPlay !== null}
+        initialPlay={editingPlay}
+        onClose={() => {
+          setIsLogging(false);
+          setEditingPlay(null);
+        }}
         onSubmit={handleSubmit}
       />
     </View>

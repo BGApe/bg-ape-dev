@@ -4,10 +4,16 @@ import appConfig from '@/config/appConfig';
 import { QueryKeys } from '@/constants/queryKeys';
 import {
   buildCollectionContext,
+  buildGameContext,
   detectActivityBias,
+  detectSetupDepth,
 } from '@/features/assistant/lib/collectionContext';
 import { buildConversationHistory } from '@/features/assistant/lib/conversationHistory';
-import type { ActivityBias } from '@/features/assistant/types';
+import type {
+  ActivityBias,
+  CollectionGameContextItem,
+  SetupDepth,
+} from '@/features/assistant/types';
 import type { CollectionGame } from '@/features/collection/types';
 import type { Play } from '@/features/plays/types';
 import { mapError } from '@/lib/mapError';
@@ -30,6 +36,31 @@ function resolveActivityBias(messages: ChatMessage[], currentText: string): Acti
     if (bias !== 'none') return bias;
   }
   return 'none';
+}
+
+function resolveSetupDepth(messages: ChatMessage[], currentText: string): SetupDepth | undefined {
+  const fromCurrent = detectSetupDepth(currentText);
+  if (fromCurrent !== undefined) return fromCurrent;
+  for (const m of messages) {
+    if (m.role !== 'user') continue;
+    const depth = detectSetupDepth(m.content);
+    if (depth !== undefined) return depth;
+  }
+  return undefined;
+}
+
+function resolveGameFromThread(
+  thread: ChatThread,
+  games: CollectionGame[],
+): CollectionGame | undefined {
+  if (thread.gameId !== undefined) {
+    return games.find((g) => g.id === thread.gameId);
+  }
+  if (thread.gameName !== undefined && thread.gameName.trim().length > 0) {
+    const name = thread.gameName.trim().toLowerCase();
+    return games.find((g) => g.name.toLowerCase() === name);
+  }
+  return undefined;
 }
 
 export function useSendMessage(thread: ChatThread | null) {
@@ -77,11 +108,12 @@ export function useSendMessage(thread: ChatThread | null) {
         appConfig.assistant.conversationHistoryLevel,
       );
 
+      const games =
+        queryClient.getQueryData<CollectionGame[]>(QueryKeys.collection.list(uid)) ?? [];
+
       const recommendationExtras =
         thread.reason === 'recommendation'
           ? (() => {
-              const games =
-                queryClient.getQueryData<CollectionGame[]>(QueryKeys.collection.list(uid)) ?? [];
               const plays = queryClient.getQueryData<Play[]>(QueryKeys.plays.list(uid)) ?? [];
               const collectionContext = buildCollectionContext(
                 games,
@@ -96,6 +128,19 @@ export function useSendMessage(thread: ChatThread | null) {
             })()
           : {};
 
+      let gameContext: CollectionGameContextItem | undefined;
+      let setupDepth: SetupDepth | undefined;
+      if (thread.reason === 'setup' || thread.reason === 'rules') {
+        const game = resolveGameFromThread(thread, games);
+        if (game !== undefined) {
+          const built = buildGameContext(game);
+          if (built !== null) gameContext = built;
+        }
+        if (thread.reason === 'setup') {
+          setupDepth = resolveSetupDepth(existingMessages, text) ?? 'basic';
+        }
+      }
+
       const assistantMessages = await runAssistantTurn(
         text,
         thread.id,
@@ -107,6 +152,8 @@ export function useSendMessage(thread: ChatThread | null) {
         isFirstMessage,
         {
           ...recommendationExtras,
+          ...(gameContext !== undefined ? { gameContext } : {}),
+          ...(setupDepth !== undefined ? { setupDepth } : {}),
           recentMessages,
         },
       );

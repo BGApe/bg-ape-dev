@@ -5,10 +5,13 @@ export type BggSearchResult = {
   yearPublished?: number;
 };
 
+export type BggThingKind = 'boardgame' | 'boardgameexpansion' | 'other';
+
 /** Full game details from BGG's /thing endpoint (stats=1). */
 export type BggThing = {
   bggId: number;
   name: string;
+  kind: BggThingKind;
   yearPublished?: number;
   minPlayers?: number;
   maxPlayers?: number;
@@ -26,4 +29,10 @@ export type BggThing = {
   categories?: string[];
   /** BGG boardgamemechanic labels, e.g. ["Deck Building", "Co-operative Play"]. */
   mechanics?: string[];
+  /** Parent base-game BGG id when this thing is an expansion. */
+  parentBggId?: number;
+  /** Number of expansion links listed on a base game. */
+  expansionCount?: number;
+  /** Expansion stubs linked from a base game (id + name). */
+  expansions?: { bggId: number; name: string }[];
 };

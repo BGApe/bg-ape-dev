@@ -94,6 +94,13 @@ function hasFilterSignals(text: string): boolean {
   );
 }
 
+function hasSetupOrRulesContext(request: AssistantRequest): boolean {
+  if (request.gameContext !== undefined) return true;
+  const t = request.text.toLowerCase();
+  // Intent prompts always include "for <Game>." when a name is set.
+  return /(?:quick setup guide|rules question) for .+/.test(t);
+}
+
 function shouldAskClarifying(request: AssistantRequest): boolean {
   if (!request.isFirstMessage) return false;
 
@@ -101,8 +108,11 @@ function shouldAskClarifying(request: AssistantRequest): boolean {
     return !hasFilterSignals(request.text);
   }
 
-  // setup and rules always benefit from one clarifying question
-  return request.threadReason === 'setup' || request.threadReason === 'rules';
+  if (request.threadReason === 'setup' || request.threadReason === 'rules') {
+    return !hasSetupOrRulesContext(request);
+  }
+
+  return false;
 }
 
 const STREAM_CHUNK_SIZE = 6;

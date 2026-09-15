@@ -127,7 +127,7 @@ export default function HomeScreen(): React.JSX.Element {
       <View className="mb-2 flex-row items-center justify-between">
         <Text className="text-base font-semibold text-[#F9F9F9]">{Copy.home.topGamesTitle}</Text>
         <TouchableOpacity
-          onPress={() => router.navigate('/(app)/collection')}
+          onPress={() => router.navigate('/(app)/(tabs)/collection')}
           accessibilityRole="button"
         >
           <Text className="text-xs text-[#818CF8]">{Copy.home.seeAll}</Text>
