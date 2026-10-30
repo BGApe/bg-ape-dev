@@ -34,6 +34,7 @@ export const AssistantResponseSchema = z.object({
   title: z.string().min(1),
   summary: z.string(),
   bullets: z.array(z.string()),
+  suggestedGames: z.array(z.string()).max(4).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

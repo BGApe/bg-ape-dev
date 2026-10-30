@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Copy } from '@/constants/copy';
 import { QueryKeys } from '@/constants/queryKeys';
+import { Routes } from '@/constants/routes';
 import { useAuthSession } from '@/features/auth/hooks/useAuthSession';
 import { chatRepository } from '@/features/chat/api/activeChatRepository';
 import { GamePickerFilters } from '@/features/chat/components/intent/GamePickerFilters';
@@ -24,9 +25,24 @@ import {
 import { RulesFilters } from '@/features/chat/components/intent/RulesFilters';
 import { useCreateThread } from '@/features/chat/hooks/useCreateThread';
 import { useThreads } from '@/features/chat/hooks/useThreads';
+import {
+  discussionHeading,
+  findGameThread,
+  newDiscussionId,
+  resolveGameAnchor,
+} from '@/features/chat/lib/gameThread';
+import { newSegmentId } from '@/features/chat/lib/messageGroups';
 import { resolveSessionPlayerCount } from '@/features/chat/lib/sessionPlayerCount';
-import type { ChatMessage, ChatReason, NewChatThread } from '@/features/chat/types';
+import { applyThreadPatch } from '@/features/chat/lib/threadPatch';
+import type {
+  ChatMessage,
+  ChatReason,
+  ChatThread,
+  NewChatThread,
+  PendingTurn,
+} from '@/features/chat/types';
 import { useCollection } from '@/features/collection/hooks/useCollection';
+import type { RulesFaqItem } from '@/services/bgg/gameProfile';
 import { useChatUiStore } from '@/store/chatUiStore';
 import type { GameId } from '@/types';
 
@@ -43,9 +59,28 @@ export default function IntentScreen(): React.JSX.Element {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuthSession();
-  const { reason: rawReason, gameId: rawGameId } = useLocalSearchParams<{
+  const {
+    reason: rawReason,
+    gameId: rawGameId,
+    gameName: rawGameName,
+    playerCount: rawPlayerCount,
+    topic: rawTopic,
+    question: rawQuestion,
+    faq: rawFaq,
+    continueThreadId: rawContinueThreadId,
+    searchPrefill: rawSearchPrefill,
+    returnToGame: rawReturnToGame,
+  } = useLocalSearchParams<{
     reason: string;
     gameId?: string;
+    gameName?: string;
+    playerCount?: string;
+    topic?: string;
+    question?: string;
+    faq?: string;
+    continueThreadId?: string;
+    searchPrefill?: string;
+    returnToGame?: string;
   }>();
   const reason: ChatReason =
     rawReason === 'recommendation' || rawReason === 'setup' || rawReason === 'rules'
@@ -53,12 +88,33 @@ export default function IntentScreen(): React.JSX.Element {
       : 'general';
   const initialGameId =
     typeof rawGameId === 'string' && rawGameId.length > 0 ? (rawGameId as GameId) : undefined;
+  const initialGameName =
+    typeof rawGameName === 'string' && rawGameName.length > 0 ? rawGameName : undefined;
+  const initialPlayerCount =
+    typeof rawPlayerCount === 'string' && rawPlayerCount.length > 0 ? rawPlayerCount : undefined;
+  const initialTopic = typeof rawTopic === 'string' && rawTopic.length > 0 ? rawTopic : undefined;
+  const initialQuestion =
+    typeof rawQuestion === 'string' && rawQuestion.length > 0 ? rawQuestion : undefined;
+  const startWithFaq = rawFaq === '1';
+  const continueThreadId =
+    typeof rawContinueThreadId === 'string' && rawContinueThreadId.length > 0
+      ? rawContinueThreadId
+      : undefined;
+  const searchPrefill =
+    typeof rawSearchPrefill === 'string' && rawSearchPrefill.length > 0
+      ? rawSearchPrefill
+      : undefined;
+  const returnToGame = rawReturnToGame === '1';
+  const formGameName =
+    initialGameName ?? (continueThreadId !== undefined ? searchPrefill : undefined);
 
   const { data: games = [] } = useCollection();
   const { data: threads = [] } = useThreads();
   const createThread = useCreateThread();
   const setActiveThreadId = useChatUiStore((s) => s.setActiveThreadId);
   const setPendingMessage = useChatUiStore((s) => s.setPendingMessage);
+  const setPendingTurn = useChatUiStore((s) => s.setPendingTurn);
+  const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
 
   const [builtPrompt, setBuiltPrompt] = useState('');
   const [editedPrompt, setEditedPrompt] = useState('');
@@ -76,7 +132,7 @@ export default function IntentScreen(): React.JSX.Element {
 
   // Reuse player count from a recent recommendation for the same game (≤2h).
   useEffect(() => {
-    if (reason !== 'setup') {
+    if (reason !== 'setup' || initialPlayerCount !== undefined) {
       setSessionPlayerCount(undefined);
       return;
     }
@@ -105,7 +161,7 @@ export default function IntentScreen(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [reason, gameSelection.gameName, threads, user, queryClient]);
+  }, [reason, initialPlayerCount, gameSelection.gameName, threads, user, queryClient]);
 
   const titleMap: Record<ChatReason, string> = {
     recommendation: C.gamePicker.title,
@@ -117,9 +173,103 @@ export default function IntentScreen(): React.JSX.Element {
   const setupNeedsPlayers = reason === 'setup' && !gameSelection.playerCount;
   const canStart = Boolean(activePrompt.trim()) && !createThread.isPending && !setupNeedsPlayers;
 
+  function rememberThread(thread: ChatThread) {
+    if (!user) return;
+    queryClient.setQueryData<ChatThread[]>(QueryKeys.chat.threads(user.uid), (prev) => {
+      const list = prev ?? [];
+      if (list.some((item) => item.id === thread.id)) {
+        return list.map((item) => (item.id === thread.id ? thread : item));
+      }
+      return [thread, ...list];
+    });
+  }
+
+  async function ensureGameThread(): Promise<ChatThread | null> {
+    if (!user || (reason !== 'setup' && reason !== 'rules')) return null;
+    const versionName = gameSelection.gameName;
+    if (versionName === undefined || versionName.length === 0) return null;
+
+    if (continueThreadId !== undefined) {
+      return threads.find((thread) => thread.id === continueThreadId) ?? null;
+    }
+
+    const anchor = resolveGameAnchor(
+      {
+        ...(gameSelection.gameId !== undefined ? { gameId: gameSelection.gameId } : {}),
+        gameName: versionName,
+      },
+      games,
+    );
+    if (anchor === null) return null;
+
+    const found = findGameThread(threads, anchor, games);
+    if (found !== undefined) {
+      const patch = {
+        gameKey: anchor.key,
+        title: anchor.gameName,
+        gameName: anchor.gameName,
+        ...(anchor.gameId !== undefined ? { gameId: anchor.gameId } : {}),
+      };
+      if (found.gameKey !== anchor.key || found.title !== anchor.gameName) {
+        await chatRepository.updateThread(user.uid, found.id, patch);
+      }
+      const next = applyThreadPatch(found, patch);
+      rememberThread(next);
+      return next;
+    }
+
+    const input: NewChatThread = {
+      title: anchor.gameName,
+      reason: 'general',
+      gameKey: anchor.key,
+      gameName: anchor.gameName,
+    };
+    if (anchor.gameId !== undefined) input.gameId = anchor.gameId;
+    const created = await createThread.mutateAsync(input);
+    rememberThread(created);
+    return created;
+  }
+
+  function queueDiscussion(thread: ChatThread, text: string, kind: 'setup' | 'rules') {
+    const versionName = gameSelection.gameName ?? thread.gameName ?? 'Game';
+    const playerCount = kind === 'setup' ? gameSelection.playerCount : undefined;
+    const turn: PendingTurn = {
+      text,
+      discussionId: newDiscussionId(),
+      discussionTitle: discussionHeading(versionName, kind, playerCount),
+      discussionKind: kind,
+      versionName,
+    };
+    if (playerCount !== undefined && playerCount.length > 0) turn.playerCount = playerCount;
+    setPendingTurn(turn);
+    setDiscussionFilter(kind);
+    openThread(thread.id);
+  }
+
+  function openThread(threadId: string) {
+    setActiveThreadId(threadId);
+    if (continueThreadId !== undefined) {
+      router.back();
+      return;
+    }
+    if (returnToGame) {
+      router.replace(Routes.gameChat);
+      return;
+    }
+    router.replace('/(app)/(tabs)/chat');
+  }
+
   function handleStart() {
     const msg = activePrompt.trim();
     if (!msg || createThread.isPending || setupNeedsPlayers) return;
+
+    if (reason === 'setup' || reason === 'rules') {
+      void ensureGameThread().then((thread) => {
+        if (thread === null) return;
+        queueDiscussion(thread, msg, reason);
+      });
+      return;
+    }
 
     const input: NewChatThread = { title: titleMap[reason], reason };
     if (gameSelection.gameId !== undefined) input.gameId = gameSelection.gameId;
@@ -136,6 +286,49 @@ export default function IntentScreen(): React.JSX.Element {
     });
   }
 
+  async function handleSelectFaq(item: RulesFaqItem) {
+    if (!user || createThread.isPending) return;
+    const thread = await ensureGameThread();
+    if (thread === null) return;
+    const versionName = gameSelection.gameName ?? thread.gameName ?? 'Game';
+    const discussionId = newDiscussionId();
+    const segmentId = newSegmentId();
+    const segmentTitle = item.question.trim().slice(0, 80) || 'Rules question';
+    const discussionTitle = discussionHeading(versionName, 'rules');
+    const now = Date.now();
+    const userMessage = await chatRepository.addMessage(user.uid, thread.id, {
+      threadId: thread.id,
+      role: 'user',
+      content: item.question,
+      createdAt: now,
+      label: segmentTitle,
+      segmentId,
+      segmentTitle,
+      discussionId,
+      discussionTitle,
+      discussionKind: 'rules',
+      versionName,
+    });
+    const assistantMessage = await chatRepository.addMessage(user.uid, thread.id, {
+      threadId: thread.id,
+      role: 'assistant',
+      content: `${item.question}\n\n${item.answer}`,
+      createdAt: now + 1,
+      segmentId,
+      segmentTitle,
+      discussionId,
+      discussionTitle,
+      discussionKind: 'rules',
+      versionName,
+    });
+    queryClient.setQueryData(
+      QueryKeys.chat.messages(thread.id),
+      (prev: ChatMessage[] | undefined) => [...(prev ?? []), userMessage, assistantMessage],
+    );
+    setDiscussionFilter('rules');
+    openThread(thread.id);
+  }
+
   const filterPanel =
     reason === 'recommendation' ? (
       <GamePickerFilters games={games} onPromptChange={handlePromptChange} />
@@ -144,7 +337,11 @@ export default function IntentScreen(): React.JSX.Element {
         games={games}
         onPromptChange={handlePromptChange}
         onContextChange={setGameSelection}
-        {...(initialGameId !== undefined ? { initialGameId } : {})}
+        {...(continueThreadId === undefined && initialGameId !== undefined
+          ? { initialGameId }
+          : {})}
+        {...(formGameName !== undefined ? { initialGameName: formGameName } : {})}
+        {...(initialPlayerCount !== undefined ? { initialPlayerCount } : {})}
         {...(sessionPlayerCount !== undefined ? { sessionPlayerCount } : {})}
       />
     ) : reason === 'rules' ? (
@@ -152,7 +349,16 @@ export default function IntentScreen(): React.JSX.Element {
         games={games}
         onPromptChange={handlePromptChange}
         onContextChange={setGameSelection}
-        {...(initialGameId !== undefined ? { initialGameId } : {})}
+        onSelectFaq={(item) => {
+          void handleSelectFaq(item);
+        }}
+        startWithFaq={startWithFaq}
+        {...(continueThreadId === undefined && initialGameId !== undefined
+          ? { initialGameId }
+          : {})}
+        {...(formGameName !== undefined ? { initialGameName: formGameName } : {})}
+        {...(initialTopic !== undefined ? { initialTopic } : {})}
+        {...(initialQuestion !== undefined ? { initialQuestion } : {})}
       />
     ) : null;
 

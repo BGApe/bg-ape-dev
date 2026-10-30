@@ -21,7 +21,7 @@ export function MessageBubble({ message, onLongPress }: Props): React.JSX.Elemen
       } ${message.isOptimistic === true ? 'opacity-70' : 'opacity-100'}`}
     >
       <Text className={`text-sm leading-relaxed ${isUser ? 'text-white' : 'text-[#F9F9F9]'}`}>
-        {message.content}
+        {message.label ?? message.content}
       </Text>
     </Pressable>
   );

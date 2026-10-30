@@ -6,7 +6,12 @@ import { Copy } from '@/constants/copy';
 import type { ActivityBias } from '@/features/assistant/types';
 import type { CollectionGame } from '@/features/collection/types';
 
-import { resolveGamePickerTags } from '../../lib/bggTagOptions';
+import { resolveGamePickerTags, searchGamePickerTags } from '../../lib/bggTagOptions';
+import {
+  tastePromptSentences,
+  type ConflictStyle,
+  type DesignStyle,
+} from '../../lib/gamePickerTaste';
 
 const C = Copy.intent.gamePicker;
 
@@ -21,7 +26,13 @@ type State = {
   playerCount: string;
   complexity: Complexity | undefined;
   playTime: PlayTime | undefined;
-  categories: string[];
+  conflict?: ConflictStyle;
+  design?: DesignStyle;
+  storyDriven?: boolean;
+  areaControl: boolean;
+  economic: boolean;
+  coolMinis: boolean;
+  extraTags: string[];
   tableSize: TableSize | undefined;
   notes: string;
 };
@@ -32,7 +43,10 @@ const INITIAL: State = {
   playerCount: '',
   complexity: undefined,
   playTime: undefined,
-  categories: [],
+  areaControl: false,
+  economic: false,
+  coolMinis: false,
+  extraTags: [],
   tableSize: undefined,
   notes: '',
 };
@@ -49,7 +63,17 @@ function buildPrompt(state: State): string {
   if (state.playerCount.trim()) parts.push(P.players(state.playerCount.trim()));
   if (state.complexity) parts.push(P.complexity(state.complexity));
   if (state.playTime) parts.push(P.playTime(state.playTime));
-  if (state.categories.length > 0) parts.push(P.categories(state.categories));
+  parts.push(
+    ...tastePromptSentences({
+      ...(state.conflict !== undefined ? { conflict: state.conflict } : {}),
+      ...(state.design !== undefined ? { design: state.design } : {}),
+      ...(state.storyDriven !== undefined ? { storyDriven: state.storyDriven } : {}),
+      areaControl: state.areaControl,
+      economic: state.economic,
+      coolMinis: state.coolMinis,
+      extraTags: state.extraTags,
+    }),
+  );
   if (state.tableSize) parts.push(P.tableSize(state.tableSize));
   if (state.fromCollection) parts.push(P.fromCollection);
   if (state.activityBias !== 'none') {
@@ -83,18 +107,25 @@ function Chip({
 
 export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.Element {
   const [state, setState] = useState<State>(INITIAL);
+  const [tagQuery, setTagQuery] = useState('');
   const tagOptions = useMemo(() => resolveGamePickerTags(games), [games]);
+  const tagMatches = useMemo(
+    () =>
+      searchGamePickerTags(tagOptions, tagQuery).filter((tag) => !state.extraTags.includes(tag)),
+    [tagOptions, tagQuery, state.extraTags],
+  );
 
-  function update(patch: Partial<State>) {
-    const next = { ...state, ...patch };
+  function update(patch: Partial<State>, clear: ('conflict' | 'design' | 'storyDriven')[] = []) {
+    const next: State = { ...state, ...patch };
+    for (const key of clear) delete next[key];
     setState(next);
     onPromptChange(buildPrompt(next));
   }
 
-  function toggleCategory(cat: string) {
-    const has = state.categories.includes(cat);
+  function toggleExtraTag(tag: string) {
+    const has = state.extraTags.includes(tag);
     update({
-      categories: has ? state.categories.filter((c) => c !== cat) : [...state.categories, cat],
+      extraTags: has ? state.extraTags.filter((item) => item !== tag) : [...state.extraTags, tag],
     });
   }
 
@@ -107,7 +138,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      {/* From my collection */}
       <View className="mb-3 flex-row items-center justify-between rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3">
         <View className="mr-3 flex-1">
           <Text className="text-sm text-[#F9F9F9]">{C.fromCollectionLabel}</Text>
@@ -121,7 +151,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
         />
       </View>
 
-      {/* Activity bias — segmented ticker */}
       <Text className="mb-1 text-xs uppercase tracking-wide text-neutral-500">
         {C.activityBiasLabel}
       </Text>
@@ -137,7 +166,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
         ))}
       </View>
 
-      {/* Players */}
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
         {C.playersLabel}
       </Text>
@@ -154,7 +182,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
         </View>
       </ScrollView>
 
-      {/* Complexity */}
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
         {C.complexityLabel}
       </Text>
@@ -169,7 +196,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
         ))}
       </View>
 
-      {/* Play time */}
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
         {C.playTimeLabel}
       </Text>
@@ -184,22 +210,94 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
         ))}
       </View>
 
-      {/* BGG Category / Mechanics */}
-      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
-        {C.categoryLabel}
-      </Text>
-      <View className="mb-4 flex-row flex-wrap">
-        {tagOptions.map((opt) => (
+      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{C.tasteLabel}</Text>
+      <View className="mb-2 flex-row flex-wrap">
+        {C.conflictOptions.map((opt) => (
           <Chip
-            key={opt}
-            label={opt}
-            selected={state.categories.includes(opt)}
-            onPress={() => toggleCategory(opt)}
+            key={opt.id}
+            label={opt.label}
+            selected={state.conflict === opt.id}
+            onPress={() =>
+              state.conflict === opt.id ? update({}, ['conflict']) : update({ conflict: opt.id })
+            }
           />
         ))}
       </View>
+      <View className="mb-2 flex-row flex-wrap">
+        {C.designOptions.map((opt) => (
+          <Chip
+            key={opt.id}
+            label={opt.label}
+            selected={state.design === opt.id}
+            onPress={() =>
+              state.design === opt.id ? update({}, ['design']) : update({ design: opt.id })
+            }
+          />
+        ))}
+      </View>
+      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{C.storyLabel}</Text>
+      <View className="mb-2 flex-row flex-wrap">
+        <Chip
+          label={C.storyYes}
+          selected={state.storyDriven === true}
+          onPress={() =>
+            state.storyDriven === true ? update({}, ['storyDriven']) : update({ storyDriven: true })
+          }
+        />
+        <Chip
+          label={C.storyNo}
+          selected={state.storyDriven === false}
+          onPress={() =>
+            state.storyDriven === false
+              ? update({}, ['storyDriven'])
+              : update({ storyDriven: false })
+          }
+        />
+      </View>
+      <View className="mb-4 flex-row flex-wrap">
+        <Chip
+          label={C.areaControl}
+          selected={state.areaControl}
+          onPress={() => update({ areaControl: !state.areaControl })}
+        />
+        <Chip
+          label={C.economic}
+          selected={state.economic}
+          onPress={() => update({ economic: !state.economic })}
+        />
+        <Chip
+          label={C.coolMinis}
+          selected={state.coolMinis}
+          onPress={() => update({ coolMinis: !state.coolMinis })}
+        />
+      </View>
 
-      {/* Table size */}
+      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
+        {C.moreFiltersLabel}
+      </Text>
+      <TextInput
+        className="mb-2 rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm text-[#F9F9F9]"
+        placeholder={C.moreFiltersPlaceholder}
+        placeholderTextColor="#525252"
+        value={tagQuery}
+        onChangeText={setTagQuery}
+        returnKeyType="search"
+      />
+      {state.extraTags.length > 0 && (
+        <View className="mb-2 flex-row flex-wrap">
+          {state.extraTags.map((tag) => (
+            <Chip key={tag} label={tag} selected onPress={() => toggleExtraTag(tag)} />
+          ))}
+        </View>
+      )}
+      {tagMatches.length > 0 && (
+        <View className="mb-4 flex-row flex-wrap">
+          {tagMatches.map((tag) => (
+            <Chip key={tag} label={tag} selected={false} onPress={() => toggleExtraTag(tag)} />
+          ))}
+        </View>
+      )}
+
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
         {C.tableSizeLabel}
       </Text>
@@ -214,7 +312,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
         ))}
       </View>
 
-      {/* Notes */}
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{C.notesLabel}</Text>
       <TextInput
         className="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm text-[#F9F9F9]"

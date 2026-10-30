@@ -37,7 +37,9 @@ function ConversationRow({
     >
       <View className="flex-row items-center justify-between">
         <View className="flex-1 flex-row items-center gap-2 pr-2">
-          <Text className="text-base">{REASON_EMOJI[thread.reason]}</Text>
+          <Text className="text-base">
+            {REASON_EMOJI[thread.gameKey !== undefined ? 'general' : thread.reason]}
+          </Text>
           <Text className="flex-1 text-base font-semibold text-[#F9F9F9]" numberOfLines={1}>
             {thread.title || Copy.chat.conversations.untitled}
           </Text>

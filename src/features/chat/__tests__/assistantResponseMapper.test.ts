@@ -83,4 +83,16 @@ describe('assistantResponseToChatMessages', () => {
 
     expect(a.id).not.toBe(b.id);
   });
+
+  it('does not repeat a title that is already the summary or a bullet', () => {
+    const response: AssistantResponse = {
+      type: 'quick_guide',
+      title: 'Place the board in the center.',
+      summary: 'Place the board in the center.',
+      bullets: ['Place the board in the center.', 'Give each player five cards.'],
+    };
+
+    const [msg] = assistantResponseToChatMessages(response, THREAD_ID);
+    expect(msg?.content).toBe('Place the board in the center.\n\n• Give each player five cards.');
+  });
 });

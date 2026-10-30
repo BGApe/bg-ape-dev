@@ -10,6 +10,7 @@ export const Routes = {
   stats: '/(app)/stats',
   plays: '/(app)/plays',
   game: '/(app)/game',
+  gameChat: '/(app)/game-chat',
   intent: '/(app)/intent',
   account: '/(app)/account',
   player: '/(app)/player',

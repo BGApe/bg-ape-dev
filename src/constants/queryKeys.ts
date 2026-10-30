@@ -35,5 +35,6 @@ export const QueryKeys = {
     all: ['bgg'] as const,
     search: (query: string) => ['bgg', 'search', query] as const,
     thing: (bggId: number) => ['bgg', 'thing', bggId] as const,
+    profile: (key: number | string) => ['bgg', 'profile', key] as const,
   },
 } as const;

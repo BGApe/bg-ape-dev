@@ -56,3 +56,16 @@ export function resolveGamePickerTags(games: CollectionGame[]): string[] {
     .sort((a, b) => a.localeCompare(b));
   return [...curated, ...extras];
 }
+
+/** Case-insensitive match against the picker tag list. Empty until 2 characters. */
+export function searchGamePickerTags(tags: string[], query: string, limit = 8): string[] {
+  const needle = query.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  const matches: string[] = [];
+  for (const tag of tags) {
+    if (!tag.toLowerCase().includes(needle)) continue;
+    matches.push(tag);
+    if (matches.length >= limit) break;
+  }
+  return matches;
+}

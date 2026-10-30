@@ -1,5 +1,6 @@
 import type { MessageId, ThreadId, UserId } from '@/types';
 
+import { applyThreadPatch } from '../lib/threadPatch';
 import type { ChatMessage, ChatThread, ChatThreadPatch, NewChatThread } from '../types';
 
 import type { ChatRepository } from './ChatRepository';
@@ -37,6 +38,7 @@ export class InMemoryChatRepository implements ChatRepository {
     };
     if (input.gameId !== undefined) thread.gameId = input.gameId;
     if (input.gameName !== undefined) thread.gameName = input.gameName;
+    if (input.gameKey !== undefined) thread.gameKey = input.gameKey;
 
     this.threads.set(thread.id, thread);
     this.messages.set(thread.id, []);
@@ -46,14 +48,7 @@ export class InMemoryChatRepository implements ChatRepository {
   updateThread(_uid: UserId, threadId: ThreadId, patch: ChatThreadPatch): Promise<void> {
     const thread = this.threads.get(threadId);
     if (thread !== undefined) {
-      this.threads.set(threadId, {
-        ...thread,
-        ...(patch.title !== undefined ? { title: patch.title } : {}),
-        ...(patch.updatedAt !== undefined ? { updatedAt: patch.updatedAt } : {}),
-        ...(patch.lastMessagePreview !== undefined
-          ? { lastMessagePreview: patch.lastMessagePreview }
-          : {}),
-      });
+      this.threads.set(threadId, applyThreadPatch(thread, patch));
     }
     return Promise.resolve();
   }
@@ -81,7 +76,7 @@ export class InMemoryChatRepository implements ChatRepository {
       this.threads.set(threadId, {
         ...thread,
         updatedAt: Date.now(),
-        lastMessagePreview: message.content.slice(0, PREVIEW_MAX),
+        lastMessagePreview: (message.label ?? message.content).slice(0, PREVIEW_MAX),
       });
     }
 

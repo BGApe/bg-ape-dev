@@ -30,10 +30,15 @@ function compact<T extends Record<string, unknown>>(obj: T): Partial<T> {
 }
 
 /** Loose shape for building a thread — optionals may be explicitly undefined. */
-type RawThread = Omit<ChatThread, 'gameId' | 'gameName' | 'lastMessagePreview'> & {
+type RawThread = Omit<
+  ChatThread,
+  'gameId' | 'gameName' | 'lastMessagePreview' | 'solvedSegmentIds' | 'gameKey'
+> & {
   gameId?: GameId | undefined;
   gameName?: string | undefined;
   lastMessagePreview?: string | undefined;
+  solvedSegmentIds?: string[] | undefined;
+  gameKey?: string | undefined;
 };
 
 /** Rebuilds a typed ChatThread from a validated doc, omitting absent optionals. */
@@ -49,7 +54,52 @@ function toThread(data: RawThread): ChatThread {
   if (data.gameId !== undefined) thread.gameId = data.gameId;
   if (data.gameName !== undefined) thread.gameName = data.gameName;
   if (data.lastMessagePreview !== undefined) thread.lastMessagePreview = data.lastMessagePreview;
+  if (data.solvedSegmentIds !== undefined && data.solvedSegmentIds.length > 0) {
+    thread.solvedSegmentIds = data.solvedSegmentIds;
+  }
+  if (data.gameKey !== undefined && data.gameKey.length > 0) thread.gameKey = data.gameKey;
   return thread;
+}
+
+function copyDiscussionFields(
+  target: ChatMessage,
+  source: {
+    discussionId?: string | undefined;
+    discussionTitle?: string | undefined;
+    discussionKind?: ChatMessage['discussionKind'] | undefined;
+    versionName?: string | undefined;
+    playerCount?: string | undefined;
+  },
+): void {
+  if (source.discussionId !== undefined && source.discussionId.length > 0) {
+    target.discussionId = source.discussionId;
+  }
+  if (source.discussionTitle !== undefined && source.discussionTitle.trim().length > 0) {
+    target.discussionTitle = source.discussionTitle.trim();
+  }
+  if (source.discussionKind !== undefined) target.discussionKind = source.discussionKind;
+  if (source.versionName !== undefined && source.versionName.trim().length > 0) {
+    target.versionName = source.versionName.trim();
+  }
+  if (source.playerCount !== undefined && source.playerCount.length > 0) {
+    target.playerCount = source.playerCount;
+  }
+}
+
+function threadPatchPayload(patch: ChatThreadPatch): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (patch.title !== undefined) payload['title'] = patch.title;
+  if (patch.reason !== undefined) payload['reason'] = patch.reason;
+  if (patch.updatedAt !== undefined) payload['updatedAt'] = patch.updatedAt;
+  if (patch.lastMessagePreview !== undefined)
+    payload['lastMessagePreview'] = patch.lastMessagePreview;
+  if (patch.solvedSegmentIds !== undefined) payload['solvedSegmentIds'] = patch.solvedSegmentIds;
+  if (patch.gameKey !== undefined) payload['gameKey'] = patch.gameKey;
+  if (patch.gameId === null) payload['gameId'] = firestore.FieldValue.delete();
+  else if (patch.gameId !== undefined) payload['gameId'] = patch.gameId;
+  if (patch.gameName === null) payload['gameName'] = firestore.FieldValue.delete();
+  else if (patch.gameName !== undefined) payload['gameName'] = patch.gameName;
+  return payload;
 }
 
 /**
@@ -78,6 +128,8 @@ export const firestoreChatRepository: ChatRepository = {
           id: parsed.data.id as ThreadId,
           userId: parsed.data.userId as UserId,
           gameId: parsed.data.gameId as GameId | undefined,
+          solvedSegmentIds: parsed.data.solvedSegmentIds,
+          gameKey: parsed.data.gameKey,
         }),
       );
     }
@@ -95,6 +147,7 @@ export const firestoreChatRepository: ChatRepository = {
       updatedAt: now,
       gameId: input.gameId,
       gameName: input.gameName,
+      gameKey: input.gameKey,
     };
     await ref.set(compact(base));
 
@@ -102,9 +155,9 @@ export const firestoreChatRepository: ChatRepository = {
   },
 
   async updateThread(uid: UserId, threadId: ThreadId, patch: ChatThreadPatch): Promise<void> {
-    await threadsRef(uid)
-      .doc(threadId)
-      .update(compact({ ...patch }));
+    const payload = threadPatchPayload(patch);
+    if (Object.keys(payload).length === 0) return;
+    await threadsRef(uid).doc(threadId).update(payload);
   },
 
   async deleteThread(uid: UserId, threadId: ThreadId): Promise<void> {
@@ -122,12 +175,21 @@ export const firestoreChatRepository: ChatRepository = {
     threadId: ThreadId,
     message: Omit<ChatMessage, 'id'>,
   ): Promise<ChatMessage> {
-    const payload = {
+    const payload = compact({
       threadId: message.threadId,
       role: message.role,
       content: message.content,
       createdAt: message.createdAt,
-    };
+      label: message.label,
+      suggestedGames: message.suggestedGames,
+      segmentId: message.segmentId,
+      segmentTitle: message.segmentTitle,
+      discussionId: message.discussionId,
+      discussionTitle: message.discussionTitle,
+      discussionKind: message.discussionKind,
+      versionName: message.versionName,
+      playerCount: message.playerCount,
+    });
 
     const msgRef = messagesRef(uid, threadId).doc();
     await msgRef.set(payload);
@@ -138,13 +200,31 @@ export const firestoreChatRepository: ChatRepository = {
         .doc(threadId)
         .update({
           updatedAt: Date.now(),
-          lastMessagePreview: message.content.slice(0, PREVIEW_MAX),
+          lastMessagePreview: (message.label ?? message.content).slice(0, PREVIEW_MAX),
         });
     } catch (error) {
       logger.warn('[FirestoreChatRepo] Failed to bump thread metadata', { threadId, error });
     }
 
-    return { ...payload, id: msgRef.id as MessageId };
+    const stored: ChatMessage = {
+      id: msgRef.id as MessageId,
+      threadId: message.threadId,
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+    };
+    if (message.label !== undefined && message.label.length > 0) stored.label = message.label;
+    if (message.suggestedGames !== undefined && message.suggestedGames.length > 0) {
+      stored.suggestedGames = message.suggestedGames;
+    }
+    if (message.segmentId !== undefined && message.segmentId.length > 0) {
+      stored.segmentId = message.segmentId;
+    }
+    if (message.segmentTitle !== undefined && message.segmentTitle.length > 0) {
+      stored.segmentTitle = message.segmentTitle;
+    }
+    copyDiscussionFields(stored, message);
+    return stored;
   },
 
   async getMessages(uid: UserId, threadId: ThreadId): Promise<ChatMessage[]> {
@@ -160,13 +240,29 @@ export const firestoreChatRepository: ChatRepository = {
         });
         continue;
       }
-      messages.push({
+      const suggestedGames = (parsed.data.suggestedGames ?? [])
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0)
+        .slice(0, 4);
+      const stored: ChatMessage = {
         id: parsed.data.id as MessageId,
         threadId: parsed.data.threadId as ThreadId,
         role: parsed.data.role,
         content: parsed.data.content,
         createdAt: parsed.data.createdAt,
-      });
+      };
+      if (parsed.data.label !== undefined && parsed.data.label.trim().length > 0) {
+        stored.label = parsed.data.label.trim();
+      }
+      if (suggestedGames.length > 0) stored.suggestedGames = suggestedGames;
+      if (parsed.data.segmentId !== undefined && parsed.data.segmentId.length > 0) {
+        stored.segmentId = parsed.data.segmentId;
+      }
+      if (parsed.data.segmentTitle !== undefined && parsed.data.segmentTitle.trim().length > 0) {
+        stored.segmentTitle = parsed.data.segmentTitle.trim();
+      }
+      copyDiscussionFields(stored, parsed.data);
+      messages.push(stored);
     }
     return messages;
   },

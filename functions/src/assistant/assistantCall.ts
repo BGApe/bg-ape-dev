@@ -62,8 +62,12 @@ const RESPONSE_SCHEMA: ObjectSchema = {
       type: SchemaType.ARRAY,
       items: { type: SchemaType.STRING } as unknown as Schema,
     } as unknown as Schema,
+    suggestedGames: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING } as unknown as Schema,
+    } as unknown as Schema,
   },
-  required: ['type', 'title', 'summary', 'bullets'],
+  required: ['type', 'title', 'summary', 'bullets', 'suggestedGames'],
 };
 
 const VALID_INTENTS: ChatIntent[] = ['recommendation', 'quick_guide', 'generic'];
@@ -284,6 +288,19 @@ export const assistantCall = onCall(
       throw new HttpsError('internal', 'Received an unexpected response from the assistant.');
     }
 
-    return parsed;
+    return sanitizeAssistantPayload(parsed);
   },
 );
+
+/** Keeps suggested game titles short and capped so reply buttons stay usable. */
+function sanitizeAssistantPayload(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== 'object') return parsed;
+  const record = parsed as Record<string, unknown>;
+  const rawGames = Array.isArray(record['suggestedGames']) ? record['suggestedGames'] : [];
+  const suggestedGames = rawGames
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0 && name.length <= 80)
+    .slice(0, 4);
+  return { ...record, suggestedGames };
+}

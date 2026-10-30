@@ -36,6 +36,10 @@ type Props = {
   onContextChange?: (ctx: IntentGameSelection) => void;
   /** Preselect a collection game (e.g. from game detail → Quick setup). */
   initialGameId?: GameId;
+  /** Prefill a game that is not in the collection (typed or recommended by name). */
+  initialGameName?: string;
+  /** Player count carried from the game picker. Wins over session reuse. */
+  initialPlayerCount?: string;
   /**
    * Player count from a recent recommendation for this game (same session, ≤2h).
    * When set, chips are prefilled; when absent, player count is required.
@@ -78,28 +82,38 @@ export function QuickSetupFilters({
   onPromptChange,
   onContextChange,
   initialGameId,
+  initialGameName,
+  initialPlayerCount,
   sessionPlayerCount,
 }: Props): React.JSX.Element {
-  const baseGames = useMemo(() => games.filter((g) => g.kind !== 'expansion'), [games]);
+  const baseGames = useMemo(() => {
+    const bases = games.filter((g) => g.kind !== 'expansion');
+    if (initialGameId === undefined) return bases;
+    const selected = games.find((g) => g.id === initialGameId);
+    if (selected !== undefined && selected.kind === 'expansion') return [selected, ...bases];
+    return bases;
+  }, [games, initialGameId]);
 
   const [state, setState] = useState<State>(() => {
+    const playerCount = initialPlayerCount ?? '';
+    const playerCountTouched = initialPlayerCount !== undefined && initialPlayerCount.length > 0;
     if (initialGameId) {
       return {
         fromCollection: true,
         selectedGameId: initialGameId,
         gameName: '',
-        playerCount: '',
+        playerCount,
         depth: undefined,
-        playerCountTouched: false,
+        playerCountTouched,
       };
     }
     return {
       fromCollection: false,
       selectedGameId: undefined,
-      gameName: '',
-      playerCount: '',
+      gameName: initialGameName ?? '',
+      playerCount,
       depth: undefined,
-      playerCountTouched: false,
+      playerCountTouched,
     };
   });
 
@@ -125,6 +139,15 @@ export function QuickSetupFilters({
     onPromptChangeRef.current(buildPrompt(preselected, baseGames));
     onContextChangeRef.current?.(selectionFromState(preselected, baseGames));
   }, [baseGames, initialGameId, state.playerCount, state.playerCountTouched]);
+
+  // Name-only handoff (recommended game that is not in the collection).
+  useEffect(() => {
+    if (initialGameId || didSyncPreselect.current) return;
+    if (!initialGameName && !initialPlayerCount) return;
+    didSyncPreselect.current = true;
+    onPromptChangeRef.current(buildPrompt(state, baseGames));
+    onContextChangeRef.current?.(selectionFromState(state, baseGames));
+  }, [baseGames, initialGameId, initialGameName, initialPlayerCount, state]);
 
   // Prefill from a same-session recommendation unless the user already chose a count.
   useEffect(() => {

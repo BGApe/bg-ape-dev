@@ -9,6 +9,7 @@ import { logger } from '@/services/logger';
 import type { ThreadId, UserId } from '@/types';
 
 import type { ChatRepository } from '../api/ChatRepository';
+import { omitRepeatedSuggestions } from '../lib/suggestedGames';
 import { assistantResponseToChatMessages } from '../mappers/assistantResponseMapper';
 import type { ChatMessage, ChatReason } from '../types';
 
@@ -25,6 +26,16 @@ type AssistantTurnExtras = {
   gameContext?: CollectionGameContextItem;
   setupDepth?: SetupDepth;
   recentMessages?: AssistantHistoryMessage[];
+  /** Titles already suggested in this thread. Repeated ones are dropped. */
+  priorSuggestions?: string[];
+  /** Follow-up block this turn belongs to, so it can collapse with its question. */
+  segmentId?: string;
+  segmentTitle?: string;
+  discussionId?: string;
+  discussionTitle?: string;
+  discussionKind?: 'setup' | 'rules';
+  versionName?: string;
+  playerCount?: string;
 };
 
 /**
@@ -64,14 +75,16 @@ export async function runAssistantTurn(
   };
 
   for await (const chunk of provider.stream(request)) {
-    composer.appendStreamChunk(chunk.delta);
     if (chunk.done) break;
   }
 
   composer.clearStream();
 
   const response = await provider.complete(request);
-  const messages = assistantResponseToChatMessages(response, threadId);
+  const messages = omitRepeatedSuggestions(
+    assistantResponseToChatMessages(response, threadId),
+    extras.priorSuggestions ?? [],
+  );
 
   const persisted: ChatMessage[] = [];
   for (const msg of messages) {
@@ -80,6 +93,15 @@ export async function runAssistantTurn(
       role: msg.role,
       content: msg.content,
       createdAt: msg.createdAt,
+      ...(msg.label !== undefined ? { label: msg.label } : {}),
+      ...(msg.suggestedGames !== undefined ? { suggestedGames: msg.suggestedGames } : {}),
+      ...(extras.segmentId !== undefined ? { segmentId: extras.segmentId } : {}),
+      ...(extras.segmentTitle !== undefined ? { segmentTitle: extras.segmentTitle } : {}),
+      ...(extras.discussionId !== undefined ? { discussionId: extras.discussionId } : {}),
+      ...(extras.discussionTitle !== undefined ? { discussionTitle: extras.discussionTitle } : {}),
+      ...(extras.discussionKind !== undefined ? { discussionKind: extras.discussionKind } : {}),
+      ...(extras.versionName !== undefined ? { versionName: extras.versionName } : {}),
+      ...(extras.playerCount !== undefined ? { playerCount: extras.playerCount } : {}),
     });
     persisted.push(saved);
   }

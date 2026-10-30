@@ -7,9 +7,6 @@ import type {
 } from '@/features/assistant/types';
 import { logger } from '@/services/logger';
 
-const STREAM_CHUNK_SIZE = 6;
-const STREAM_INTERVAL_MS = 30;
-
 function buildStreamText(response: AssistantResponse): string {
   const bulletLines = response.bullets.map((b) => `• ${b}`).join('\n');
   return `${response.title}\n\n${response.summary}\n\n${bulletLines}`;
@@ -74,21 +71,9 @@ export class VertexAIInFirebaseAssistantProvider implements AssistantProvider {
   }
 
   async *stream(request: AssistantRequest): AsyncIterable<AssistantChunk> {
+    // One model call. The finished answer is not replayed token-by-token in the UI.
     const response = await this._ensureResponse(request);
-    const fullText = buildStreamText(response);
-
-    for (let i = 0; i < fullText.length; i += STREAM_CHUNK_SIZE) {
-      const delta = fullText.slice(i, i + STREAM_CHUNK_SIZE);
-      const done = i + STREAM_CHUNK_SIZE >= fullText.length;
-
-      await new Promise<void>((resolve) => setTimeout(resolve, STREAM_INTERVAL_MS));
-
-      yield { delta, done };
-
-      if (done) return;
-    }
-
-    yield { delta: '', done: true };
+    yield { delta: buildStreamText(response), done: true };
   }
 }
 

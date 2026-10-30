@@ -7,7 +7,8 @@ import { logger } from '@/services/logger';
 import type { ThreadId } from '@/types';
 
 import { chatRepository } from '../api/activeChatRepository';
-import type { ChatThreadPatch } from '../types';
+import { applyThreadPatch } from '../lib/threadPatch';
+import type { ChatThread, ChatThreadPatch } from '../types';
 
 export function useUpdateThread() {
   const queryClient = useQueryClient();
@@ -19,8 +20,13 @@ export function useUpdateThread() {
       return chatRepository.updateThread(user.uid, args.threadId, args.patch);
     },
 
-    onSuccess() {
+    onSuccess(_void, args) {
       if (!user) return;
+      queryClient.setQueryData<ChatThread[]>(QueryKeys.chat.threads(user.uid), (prev) =>
+        (prev ?? []).map((thread) =>
+          thread.id === args.threadId ? applyThreadPatch(thread, args.patch) : thread,
+        ),
+      );
       void queryClient.invalidateQueries({ queryKey: QueryKeys.chat.threads(user.uid) });
     },
 

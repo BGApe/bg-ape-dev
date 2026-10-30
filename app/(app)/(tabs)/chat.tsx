@@ -1,5 +1,6 @@
+import { useFocusEffect } from 'expo-router';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, BackHandler, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,19 +23,22 @@ export default function ChatScreen(): React.JSX.Element {
 
   const activeThreadId = useChatUiStore((s) => s.activeThreadId);
   const setActiveThreadId = useChatUiStore((s) => s.setActiveThreadId);
+  const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
   const [isCreating, setIsCreating] = useState(false);
 
   const activeThread: ChatThread | null = threads.find((t) => t.id === activeThreadId) ?? null;
 
-  // Android hardware back: pop the open conversation instead of leaving the tab.
-  useEffect(() => {
-    if (activeThread === null) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      setActiveThreadId(null);
-      return true;
-    });
-    return () => sub.remove();
-  }, [activeThread, setActiveThreadId]);
+  // Android hardware back: leave this conversation for the list, only while the tab is showing.
+  useFocusEffect(
+    useCallback(() => {
+      if (activeThread === null) return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        setActiveThreadId(null);
+        return true;
+      });
+      return () => sub.remove();
+    }, [activeThread, setActiveThreadId]),
+  );
 
   function handleCreate(input: NewChatThread) {
     setIsCreating(false);
@@ -67,7 +71,10 @@ export default function ChatScreen(): React.JSX.Element {
       <ConversationList
         threads={threads}
         isLoading={isLoading}
-        onSelect={(t) => setActiveThreadId(t.id)}
+        onSelect={(t) => {
+          setDiscussionFilter(null);
+          setActiveThreadId(t.id);
+        }}
         onDelete={handleDelete}
         onNew={() => setIsCreating(true)}
       />

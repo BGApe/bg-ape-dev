@@ -67,6 +67,8 @@ export type AssistantResponse = {
   title: string;
   summary: string;
   bullets: string[];
+  /** Exact titles for reply buttons. Empty when the reply is not naming games. */
+  suggestedGames?: string[];
   metadata?: Record<string, unknown>;
 };
 

@@ -17,6 +17,7 @@ const MOCK_RESPONSES: Record<string, AssistantResponse> = {
       'Azul — elegant abstract tile-placement, plays in 30–45 min',
       'Cascadia — relaxing nature puzzle, easy to teach, competitive scoring',
     ],
+    suggestedGames: ['Wingspan', 'Ticket to Ride', 'Azul', 'Cascadia'],
   },
   quick_guide: {
     type: 'quick_guide',
@@ -90,6 +91,12 @@ function hasFilterSignals(text: string): boolean {
     t.includes('frequently played favorites') ||
     t.includes('played recently') ||
     t.includes('cooperative game') ||
+    t.includes('competitive game') ||
+    t.includes('euro-style') ||
+    t.includes('ameritrash') ||
+    t.includes('story-driven') ||
+    t.includes('area control') ||
+    t.includes('miniatures') ||
     t.includes('deck, bag, and pool building')
   );
 }
@@ -115,9 +122,6 @@ function shouldAskClarifying(request: AssistantRequest): boolean {
   return false;
 }
 
-const STREAM_CHUNK_SIZE = 6;
-const STREAM_INTERVAL_MS = 40;
-
 function buildStreamText(response: AssistantResponse): string {
   const bulletLines = response.bullets.map((b) => `• ${b}`).join('\n');
   return `${response.title}\n\n${response.summary}\n\n${bulletLines}`;
@@ -135,20 +139,7 @@ export class MockAssistantProvider implements AssistantProvider {
     const response = shouldAskClarifying(request)
       ? (CLARIFYING[request.threadReason] ?? MOCK_RESPONSES['generic'])
       : (MOCK_RESPONSES[request.intent] ?? MOCK_RESPONSES['generic']);
-    const fullText = buildStreamText(response as AssistantResponse);
-
-    for (let i = 0; i < fullText.length; i += STREAM_CHUNK_SIZE) {
-      const delta = fullText.slice(i, i + STREAM_CHUNK_SIZE);
-      const done = i + STREAM_CHUNK_SIZE >= fullText.length;
-
-      await new Promise<void>((resolve) => setTimeout(resolve, STREAM_INTERVAL_MS));
-
-      yield { delta, done };
-
-      if (done) return;
-    }
-
-    yield { delta: '', done: true };
+    yield { delta: buildStreamText(response as AssistantResponse), done: true };
   }
 }
 

@@ -8,6 +8,9 @@ import { BarChart } from '@/components/BarChart';
 import { MetaChip } from '@/components/MetaChip';
 import { Copy } from '@/constants/copy';
 import { Routes } from '@/constants/routes';
+import { useThreads } from '@/features/chat/hooks/useThreads';
+import { useUpdateThread } from '@/features/chat/hooks/useUpdateThread';
+import { findGameThread, resolveGameAnchor } from '@/features/chat/lib/gameThread';
 import { AddGameSheet } from '@/features/collection/components/AddGameSheet';
 import { useAddGame } from '@/features/collection/hooks/useAddGame';
 import { useBggThing } from '@/features/collection/hooks/useBggThing';
@@ -23,6 +26,7 @@ import {
   statsForGame,
 } from '@/features/plays/lib/gamePlayStats';
 import type { ChartMetric } from '@/features/plays/lib/gamePlayStats';
+import { useChatUiStore } from '@/store/chatUiStore';
 import type { GameId } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,6 +78,10 @@ export default function GameDetailScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: games = [] } = useCollection();
+  const { data: threads = [] } = useThreads();
+  const updateThread = useUpdateThread();
+  const setActiveThreadId = useChatUiStore((s) => s.setActiveThreadId);
+  const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
   const { data: plays = [] } = usePlays();
   const self = useEnsureSelfPlayer();
   const updateGame = useUpdateGame();
@@ -132,6 +140,32 @@ export default function GameDetailScreen(): React.JSX.Element {
   }
 
   // ── Derived data (after null guard) ───────────────────────────────────────
+
+  const openGameChat = (kind: 'setup' | 'rules') => {
+    const anchor = resolveGameAnchor({ gameId: game.id, gameName: game.name }, games);
+    const existing = anchor !== null ? findGameThread(threads, anchor, games) : undefined;
+    setDiscussionFilter(kind);
+    if (existing !== undefined) {
+      if (anchor !== null && existing.gameKey !== anchor.key) {
+        updateThread.mutate({
+          threadId: existing.id,
+          patch: {
+            gameKey: anchor.key,
+            title: anchor.gameName,
+            gameName: anchor.gameName,
+            ...(anchor.gameId !== undefined ? { gameId: anchor.gameId } : {}),
+          },
+        });
+      }
+      setActiveThreadId(existing.id);
+      router.push(Routes.gameChat);
+      return;
+    }
+    router.push({
+      pathname: Routes.intent,
+      params: { reason: kind, gameId: game.id, returnToGame: '1' },
+    });
+  };
 
   const gamePlays = plays
     .filter((p) => p.gameId === game.id)
@@ -259,12 +293,7 @@ export default function GameDetailScreen(): React.JSX.Element {
         {/* Assistant entry points */}
         <View className="mt-4 flex-row gap-2">
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: Routes.intent,
-                params: { reason: 'setup', gameId: game.id },
-              })
-            }
+            onPress={() => openGameChat('setup')}
             accessibilityRole="button"
             className="flex-1 items-center rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-3"
           >
@@ -273,12 +302,7 @@ export default function GameDetailScreen(): React.JSX.Element {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: Routes.intent,
-                params: { reason: 'rules', gameId: game.id },
-              })
-            }
+            onPress={() => openGameChat('rules')}
             accessibilityRole="button"
             className="flex-1 items-center rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-3"
           >

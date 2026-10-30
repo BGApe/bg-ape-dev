@@ -22,6 +22,7 @@ export default function AppLayout(): React.JSX.Element | null {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       {/* Stack-only screens — no tab bar shown */}
       <Stack.Screen name="game" options={{ headerShown: false }} />
+      <Stack.Screen name="game-chat" options={{ headerShown: false }} />
       <Stack.Screen name="plays" options={{ headerShown: false }} />
       <Stack.Screen name="stats" options={{ headerShown: false }} />
       <Stack.Screen name="intent" options={{ headerShown: false }} />

@@ -3,3 +3,4 @@
  */
 export { assistantPing } from './assistant/assistantPing';
 export { assistantCall } from './assistant/assistantCall';
+export { ensureBggGameProfile, recordGameplayQuestion } from './bgg/ensureBggGameProfile';
