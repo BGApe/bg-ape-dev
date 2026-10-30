@@ -26,6 +26,7 @@ export const ChatMessageSchema = z.object({
   suggestedGames: z.array(z.string()).max(8).optional(),
   segmentId: z.string().min(1).max(80).optional(),
   segmentTitle: z.string().min(1).max(120).optional(),
+  parentSegmentId: z.string().min(1).max(80).optional(),
   discussionId: z.string().min(1).max(80).optional(),
   discussionTitle: z.string().min(1).max(160).optional(),
   discussionKind: z.enum(['setup', 'rules']).optional(),

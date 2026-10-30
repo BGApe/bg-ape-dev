@@ -22,6 +22,8 @@ export type BggThing = {
   averageWeight?: number;
   /** Average user rating, 1–10. */
   bggRating?: number;
+  /** How many people rated the game. A stored stand-in for how widely it is played. */
+  usersRated?: number;
   /** Overall BoardGameGeek rank (lower is better); undefined if unranked. */
   bggRank?: number;
   description?: string;

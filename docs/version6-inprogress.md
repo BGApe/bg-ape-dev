@@ -313,6 +313,12 @@ change (it already emits `CollectionGameContextItem`).
 - **Dynamic game-picker filters.** Once play time and complexity are set, nudge the
   other filters to match (party games lean short, heavy euros lean long). Not in the
   current filter pass.
+- **Shared play stats.** Only one player tracks the play (timer and play log). The
+  stats are mirrored to the other players in that play who also use the app, so they
+  do not each log the same session.
+- **Box photo to open a game.** Photograph the game box to identify the game, prefill
+  the chat filters (player count and the other picker filters already in the app
+  where the photo can supply them), and open the chat for that specific game.
 
 ## Open items / notes
 

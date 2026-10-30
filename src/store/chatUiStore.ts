@@ -22,6 +22,9 @@ type ChatUiState = {
   /** When set, a game chat shows only setup or only rules discussions. */
   discussionFilter: DiscussionKind | null;
   setDiscussionFilter: (filter: DiscussionKind | null) => void;
+  /** Version to confirm when Rules help opens from a game, including an expansion. */
+  versionSeed: string | null;
+  setVersionSeed: (name: string | null) => void;
   pendingTurn: PendingTurn | null;
   setPendingTurn: (turn: PendingTurn | null) => void;
   tryConsumePendingTurn: (turn: PendingTurn) => boolean;
@@ -34,6 +37,8 @@ export const useChatUiStore = create<ChatUiState>()((set, get) => ({
   consumedPending: null,
   discussionFilter: null,
   setDiscussionFilter: (discussionFilter) => set({ discussionFilter }),
+  versionSeed: null,
+  setVersionSeed: (versionSeed) => set({ versionSeed }),
   pendingTurn: null,
   setPendingTurn: (pendingTurn) =>
     set({

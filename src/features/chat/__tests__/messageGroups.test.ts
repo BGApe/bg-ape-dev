@@ -4,17 +4,26 @@ import type { GameId, MessageId, ThreadId, UserId } from '@/types';
 
 import {
   discussionHeading,
+  familyVersions,
   findGameThread,
   openingTopicTitle,
   resolveGameAnchor,
 } from '../lib/gameThread';
 import {
+  attachStrategyChildren,
   collapseRepeated,
   groupDiscussions,
   groupSolvedSegments,
   groupTopicRuns,
 } from '../lib/messageGroups';
-import { elaboratePrompt, retargetGamePrompt, topicFollowupPrompt } from '../lib/replyPrompts';
+import { playerCountChips } from '../lib/playerCountChips';
+import { previewSentences, strategyTitles } from '../lib/previewText';
+import {
+  elaboratePrompt,
+  retargetGamePrompt,
+  rulesFamilyNote,
+  topicFollowupPrompt,
+} from '../lib/replyPrompts';
 
 const THREAD = 'thread-1' as ThreadId;
 
@@ -112,8 +121,32 @@ describe('groupTopicRuns', () => {
     );
 
     expect(blocks[0]).toMatchObject({ kind: 'segment', title: '5 minute setup' });
-    expect(blocks[1]).toMatchObject({ kind: 'message' });
-    expect(blocks[2]).toMatchObject({ kind: 'message' });
+    expect(blocks[1]).toMatchObject({ kind: 'segment', title: 'Scoring' });
+  });
+
+  it('nests a strategy follow-up under popular strategies', () => {
+    const blocks = attachStrategyChildren(
+      groupTopicRuns(
+        [
+          message('1', 'assistant', '1. Big Money\nBuy treasure.\n\n2. Engine\nBuy actions.', {
+            segmentId: 'seg-pop',
+            segmentTitle: 'Popular strategies',
+          }),
+          message('2', 'assistant', 'Buy only treasure.', {
+            segmentId: 'seg-detail',
+            segmentTitle: 'Big Money',
+            parentSegmentId: 'seg-pop',
+          }),
+        ],
+        'setup',
+      ),
+      'Popular strategies',
+    );
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ title: 'Popular strategies' });
+    if (blocks[0]?.kind !== 'segment') return;
+    expect(blocks[0].children.map((child) => child.title)).toEqual(['Big Money']);
   });
 });
 
@@ -121,6 +154,9 @@ describe('game threads', () => {
   it('names a setup discussion with the version and player count', () => {
     expect(discussionHeading('Dominion Prosperity', 'setup', '4')).toBe(
       'Dominion Prosperity: Quick setup (for 4 players)',
+    );
+    expect(discussionHeading('Dominion', 'rules', '2')).toBe(
+      'Dominion: Rules help (for 2 players)',
     );
     expect(
       openingTopicTitle('setup', 'Give me just enough to start playing right now (5 minutes).'),
@@ -193,6 +229,25 @@ describe('game threads', () => {
   });
 });
 
+describe('player count chips', () => {
+  it('limits chips to the published player range', () => {
+    expect(playerCountChips(2, 4)).toEqual(['2', '3', '4']);
+    expect(playerCountChips()).toEqual(['1', '2', '3', '4', '5', '6', '6+']);
+  });
+});
+
+describe('rules family note', () => {
+  it('names the base game and the owned expansions', () => {
+    const note = rulesFamilyNote({ name: 'Dominion', kind: 'base', bggId: 36218 }, [
+      { name: 'Dominion', kind: 'base', bggId: 36218 },
+      { name: 'Dominion: Prosperity', kind: 'expansion', parentBggId: 36218 },
+    ]);
+    expect(note).toContain('Dominion');
+    expect(note).toContain('Dominion: Prosperity');
+    expect(note).toContain('not in the base game');
+  });
+});
+
 describe('follow-up prompts', () => {
   it('keeps a topic question in the same game', () => {
     const prompt = topicFollowupPrompt('Catan', 'Initial resources');
@@ -217,5 +272,43 @@ describe('follow-up prompts', () => {
     expect(prompt.text).toContain('Quick setup guide for Azul.');
     expect(prompt.text).toContain('We are 4 players.');
     expect(prompt.text).not.toContain('Catan');
+  });
+});
+
+describe('topic previews', () => {
+  it('keeps the first two sentences and the numbered strategy titles', () => {
+    expect(previewSentences('Lay out the cards. Deal five copper. Then start.')).toBe(
+      'Lay out the cards. Deal five copper.',
+    );
+    expect(
+      strategyTitles(
+        '1. Big Money\nBuy treasure.\n\n2. Engine\nBuy actions.\n\n3. Rush\nEnd early.',
+      ),
+    ).toEqual(['Big Money', 'Engine', 'Rush']);
+  });
+
+  it('lists the base game and owned expansions', () => {
+    const dominion = {
+      id: 'base' as GameId,
+      name: 'Dominion',
+      kind: 'base',
+      bggId: 36218,
+      source: 'bgg',
+      addedAt: 1,
+    } satisfies CollectionGame;
+    const prosperity = {
+      id: 'exp' as GameId,
+      name: 'Dominion: Prosperity',
+      kind: 'expansion',
+      bggId: 1,
+      parentBggId: 36218,
+      source: 'bgg',
+      addedAt: 2,
+    } satisfies CollectionGame;
+    expect(
+      familyVersions([dominion, prosperity], dominion, 'Dominion: Prosperity').map(
+        (item) => item.name,
+      ),
+    ).toEqual(['Dominion', 'Dominion: Prosperity']);
   });
 });

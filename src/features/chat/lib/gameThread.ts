@@ -15,7 +15,11 @@ export function discussionHeading(
   kind: DiscussionKind,
   playerCount?: string,
 ): string {
-  if (kind === 'rules') return `${versionName}: Rules help`;
+  if (kind === 'rules') {
+    const players =
+      playerCount !== undefined && playerCount.length > 0 ? ` (for ${playerCount} players)` : '';
+    return `${versionName}: Rules help${players}`;
+  }
   const players =
     playerCount !== undefined && playerCount.length > 0 ? ` (for ${playerCount} players)` : '';
   return `${versionName}: Quick setup${players}`;
@@ -87,6 +91,40 @@ export function resolveGameAnchor(
     gameName: versionName,
     versionName,
   };
+}
+
+export type VersionChoice = {
+  name: string;
+  game?: CollectionGame;
+};
+
+/** Base game, owned expansions, and the version already used in this chat. */
+export function familyVersions(
+  games: readonly CollectionGame[],
+  parent: CollectionGame | undefined,
+  currentName: string,
+): VersionChoice[] {
+  const choices: VersionChoice[] = [];
+  const seen = new Set<string>();
+  function add(name: string, game?: CollectionGame) {
+    const key = name.trim().toLowerCase();
+    if (key.length === 0 || seen.has(key)) return;
+    seen.add(key);
+    const choice: VersionChoice = { name: name.trim() };
+    if (game !== undefined) choice.game = game;
+    choices.push(choice);
+  }
+  if (parent !== undefined) {
+    add(parent.name, parent);
+    if (parent.bggId !== undefined) {
+      for (const game of games) {
+        if (game.kind === 'expansion' && game.parentBggId === parent.bggId) add(game.name, game);
+      }
+    }
+  }
+  const named = games.find((game) => game.name.toLowerCase() === currentName.trim().toLowerCase());
+  add(currentName, named);
+  return choices;
 }
 
 function isHelpThread(thread: ChatThread): boolean {

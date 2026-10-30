@@ -132,6 +132,9 @@ export function parseThingItem(item: XmlNode, bggId: number): BggThing | null {
     const rating = toNum((ratings.average as XmlNode | undefined)?.value);
     if (rating !== undefined && rating > 0) thing.bggRating = rating;
 
+    const usersRated = toNum((ratings.usersrated as XmlNode | undefined)?.value);
+    if (usersRated !== undefined && usersRated > 0) thing.usersRated = usersRated;
+
     const weight = toNum((ratings.averageweight as XmlNode | undefined)?.value);
     if (weight !== undefined && weight > 0) thing.averageWeight = weight;
 

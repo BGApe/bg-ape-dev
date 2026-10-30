@@ -72,6 +72,8 @@ export type ChatMessage = {
   segmentId?: string;
   /** Short title shown on the collapsed card, such as "Initial resources". */
   segmentTitle?: string;
+  /** When set, this topic is a follow-up nested under another segment. */
+  parentSegmentId?: string;
   /** Sub-discussion inside a game's single chat (one version + setup or rules). */
   discussionId?: string;
   discussionTitle?: string;

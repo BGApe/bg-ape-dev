@@ -15,9 +15,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Copy } from '@/constants/copy';
 import { Routes } from '@/constants/routes';
+import { useBggGameProfile } from '@/features/collection/hooks/useBggGameProfile';
 import { useCollection } from '@/features/collection/hooks/useCollection';
 import { mapError } from '@/lib/mapError';
-import { recordGameplayQuestion, type RulesFaqItem } from '@/services/bgg/gameProfile';
+import {
+  recordGameplayQuestion,
+  type RulesFaqItem,
+  type WinningStrategy,
+} from '@/services/bgg/gameProfile';
 import { logger } from '@/services/logger';
 import { useChatUiStore } from '@/store/chatUiStore';
 import { useComposerStore } from '@/store/composerStore';
@@ -29,25 +34,40 @@ import { useDeleteMessage } from '../hooks/useDeleteMessage';
 import { useRecordExchange } from '../hooks/useRecordExchange';
 import { useSendMessage } from '../hooks/useSendMessage';
 import { useUpdateThread } from '../hooks/useUpdateThread';
-import { discussionHeading, newDiscussionId } from '../lib/gameThread';
+import { discussionHeading, familyVersions, newDiscussionId } from '../lib/gameThread';
 import {
   collapseRepeated,
+  attachStrategyChildren,
   groupDiscussions,
   groupSolvedSegments,
   groupTopicRuns,
   newSegmentId,
   type DiscussionGroup,
 } from '../lib/messageGroups';
-import { retargetGamePrompt } from '../lib/replyPrompts';
+import { playerCountChips } from '../lib/playerCountChips';
+import { previewSentences, strategyTitles } from '../lib/previewText';
+import {
+  coreMechanicsPrompt,
+  differentStrategiesPrompt,
+  payAttentionPrompt,
+  popularStrategiesPrompt,
+  retargetGamePrompt,
+  setupDepthPrompt,
+  strategyFocusPrompt,
+} from '../lib/replyPrompts';
 import { REASON_EMOJI } from '../reasons';
 import type { ChatMessage, ChatThread, ChatThreadPatch, DiscussionKind } from '../types';
 
+import { CollapseBar } from './CollapseBar';
 import { Composer } from './Composer';
 import { GameContextCard } from './GameContextCard';
+import { GameReplyBar, type GameReplyLayer } from './GameReplyBar';
 import { GameSwitchSheet } from './GameSwitchSheet';
 import { MessageBubble } from './MessageBubble';
 import { ReplyActions, type ReplyFollowup, type ReplyMenu } from './ReplyActions';
+import { RulesContextBar } from './RulesContextBar';
 import { SolvedSegmentCard } from './SolvedSegmentCard';
+import { TopicPreview } from './TopicPreview';
 
 type Props = {
   thread: ChatThread;
@@ -56,9 +76,15 @@ type Props = {
 
 type ChatRow =
   | { key: string; type: 'discussion'; id: string; title: string; expanded: boolean }
-  | { key: string; type: 'segment'; id: string; title: string; messages: ChatMessage[] }
-  | { key: string; type: 'message'; message: ChatMessage }
-  | { key: string; type: 'actions'; discussionId: string };
+  | {
+      key: string;
+      type: 'segment';
+      id: string;
+      title: string;
+      messages: ChatMessage[];
+      children: { id: string; title: string; messages: ChatMessage[] }[];
+    }
+  | { key: string; type: 'message'; message: ChatMessage };
 
 function discussionFields(discussion: DiscussionGroup): {
   discussionId?: string;
@@ -95,6 +121,9 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   const pendingMessage = useChatUiStore((s) => s.pendingMessage);
   const pendingTurn = useChatUiStore((s) => s.pendingTurn);
   const discussionFilter = useChatUiStore((s) => s.discussionFilter);
+  const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
+  const versionSeed = useChatUiStore((s) => s.versionSeed);
+  const setVersionSeed = useChatUiStore((s) => s.setVersionSeed);
   const { data: collectionGames = [] } = useCollection();
   const canSwitchGame =
     thread.gameKey === undefined && (thread.reason === 'setup' || thread.reason === 'rules');
@@ -110,7 +139,15 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   const [expandedSegmentIds, setExpandedSegmentIds] = useState<string[]>([]);
   const [switchOpen, setSwitchOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [chosenDiscussionId, setChosenDiscussionId] = useState<string | null>(null);
+  const [chosenDiscussionId, setChosenDiscussionId] = useState<string | null>('');
+  const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
+  const [focusedSegmentKey, setFocusedSegmentKey] = useState<string | null>(null);
+  const [rulesPick, setRulesPick] = useState<{ versionName: string; playerCount?: string } | null>(
+    null,
+  );
+  const [faqOpen, setFaqOpen] = useState(false);
+  const [strategyRepeatAsk, setStrategyRepeatAsk] = useState(false);
+  const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const [seenThreadId, setSeenThreadId] = useState(thread.id);
   if (seenThreadId !== thread.id) {
     setSeenThreadId(thread.id);
@@ -119,7 +156,13 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     setExpandedSegmentIds([]);
     setNotice(null);
     setSwitchOpen(false);
-    setChosenDiscussionId(null);
+    setChosenDiscussionId('');
+    setActiveDiscussionId(null);
+    setFocusedSegmentKey(null);
+    setRulesPick(null);
+    setFaqOpen(false);
+    setExpandedFaq(null);
+    setStrategyRepeatAsk(false);
   }
 
   /** Auto-send any message queued by the intent screen, once per prompt. */
@@ -127,6 +170,13 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     if (pendingTurn) {
       if (!useChatUiStore.getState().tryConsumePendingTurn(pendingTurn)) return;
       setChosenDiscussionId(pendingTurn.discussionId);
+      setActiveDiscussionId(pendingTurn.discussionId);
+      const pendingKey =
+        pendingTurn.segmentId !== undefined
+          ? `${pendingTurn.discussionId}-${pendingTurn.segmentId}`
+          : `${pendingTurn.discussionId}-opening`;
+      setExpandedSegmentIds([pendingKey]);
+      setFocusedSegmentKey(pendingKey);
       sendMessage.mutate({
         text: pendingTurn.text,
         discussionId: pendingTurn.discussionId,
@@ -148,6 +198,12 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     sendMessage.mutate(pendingMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id, pendingMessage, pendingTurn]);
+
+  useEffect(() => {
+    if (versionSeed === null || versionSeed.length === 0) return;
+    setRulesPick({ versionName: versionSeed });
+    setVersionSeed(null);
+  }, [setVersionSeed, versionSeed]);
 
   const isSending = sendMessage.isPending || recordExchange.isPending || updateThread.isPending;
   const error = sendMessage.error ? mapError(sendMessage.error) : null;
@@ -173,7 +229,7 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   );
   const blocks =
     thread.reason === 'setup' || thread.reason === 'rules'
-      ? groupTopicRuns(messages, topicKind, thread.solvedSegmentIds ?? [])
+      ? groupTopicRuns(messages, topicKind)
       : groupSolvedSegments(messages, thread.solvedSegmentIds ?? []);
   const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const suggestionMessage = [...messages]
@@ -188,17 +244,178 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
       ? { segmentId: latestAssistant.segmentId, segmentTitle: latestAssistant.segmentTitle }
       : null;
 
+  const setupDiscussions = discussions.filter((discussion) => discussion.kind === 'setup');
+  const setupTarget =
+    (openDiscussion?.kind === 'setup' ? openDiscussion : undefined) ??
+    setupDiscussions.find((discussion) => discussion.id === activeDiscussionId) ??
+    setupDiscussions[setupDiscussions.length - 1];
+  const activeDiscussion =
+    discussions.find((discussion) => discussion.id === activeDiscussionId) ??
+    visibleDiscussions[visibleDiscussions.length - 1];
+  const rulesMode =
+    unified &&
+    (discussionFilter === 'rules' ||
+      (discussionFilter === null && activeDiscussion?.kind === 'rules'));
+  const setupMode = unified && !rulesMode;
+  const latestRules = [...discussions].reverse().find((discussion) => discussion.kind === 'rules');
+  const rulesVersionName =
+    rulesPick?.versionName ??
+    latestRules?.versionName ??
+    setupTarget?.versionName ??
+    thread.gameName ??
+    thread.title;
+  const rawPlayers =
+    rulesPick !== null
+      ? rulesPick.playerCount
+      : (latestRules?.playerCount ?? setupTarget?.playerCount);
+  const versionChoices = familyVersions(collectionGames, contextGame, rulesVersionName);
+  const selectedVersion = versionChoices.find(
+    (choice) => choice.name.toLowerCase() === rulesVersionName.trim().toLowerCase(),
+  );
+  const rulesPlayerChips = playerCountChips(
+    selectedVersion?.game?.minPlayers ?? contextGame?.minPlayers,
+    selectedVersion?.game?.maxPlayers ?? contextGame?.maxPlayers,
+  );
+  const rulesPlayerCount = rulesPlayerChips.includes(rawPlayers ?? '')
+    ? rawPlayers
+    : rulesPlayerChips[0];
+  const profileName = rulesMode ? rulesVersionName : (setupTarget?.versionName ?? thread.gameName);
+  const profileGame =
+    profileName !== undefined
+      ? collectionGames.find((game) => game.name.toLowerCase() === profileName.trim().toLowerCase())
+      : undefined;
+  const profile = useBggGameProfile(
+    unified && profileName !== undefined && profileName.length > 2
+      ? profileGame?.bggId !== undefined
+        ? { bggId: profileGame.bggId }
+        : { name: profileName }
+      : null,
+  );
+  const openPieces =
+    openDiscussion !== undefined
+      ? groupTopicRuns(openDiscussion.messages, openDiscussion.kind)
+      : [];
+  const focusedPiece = openPieces.find(
+    (piece) =>
+      piece.kind === 'segment' && `${openDiscussion?.id ?? ''}-${piece.id}` === focusedSegmentKey,
+  );
+  const focusedTitle =
+    focusedSegmentKey !== null &&
+    expandedSegmentIds.includes(focusedSegmentKey) &&
+    focusedPiece?.kind === 'segment'
+      ? focusedPiece.title
+      : undefined;
+  const strategyNameList = strategyTitles(
+    (setupTarget?.messages ?? [])
+      .filter(
+        (message) =>
+          message.role === 'assistant' &&
+          message.segmentTitle === Copy.chat.reply.popularStrategies,
+      )
+      .map((message) => message.content)
+      .join('\n'),
+  );
+  const replyLayer: GameReplyLayer = rulesMode
+    ? 'rules'
+    : focusedTitle !== undefined &&
+        (focusedTitle === Copy.chat.reply.popularStrategies ||
+          strategyNameList.includes(focusedTitle))
+      ? 'strategies'
+      : focusedTitle !== undefined
+        ? 'guide'
+        : 'root';
+
+  function reveal(discussionId: string, segmentId: string) {
+    const key = `${discussionId}-${segmentId}`;
+    setChosenDiscussionId(discussionId);
+    setActiveDiscussionId(discussionId);
+    setExpandedSegmentIds([key]);
+    setFocusedSegmentKey(key);
+  }
+
+  function sendInto(options: {
+    kind: DiscussionKind;
+    versionName: string;
+    playerCount?: string;
+    text: string;
+    label: string;
+    title: string;
+    existing?: DiscussionGroup;
+    parentSegmentId?: string;
+  }) {
+    const segmentId = newSegmentId();
+    const players =
+      options.playerCount !== undefined && options.playerCount.length > 0
+        ? options.playerCount
+        : undefined;
+    if (options.existing !== undefined) {
+      reveal(options.existing.id, segmentId);
+      sendMessage.mutate({
+        text: options.text,
+        label: options.label,
+        segmentId,
+        segmentTitle: options.title,
+        ...discussionFields(options.existing),
+        ...(options.parentSegmentId !== undefined
+          ? { parentSegmentId: options.parentSegmentId }
+          : {}),
+      });
+      return;
+    }
+    const discussionId = newDiscussionId();
+    reveal(discussionId, segmentId);
+    sendMessage.mutate({
+      text: options.text,
+      label: options.label,
+      segmentId,
+      segmentTitle: options.title,
+      discussionId,
+      discussionTitle: discussionHeading(options.versionName, options.kind, players),
+      discussionKind: options.kind,
+      versionName: options.versionName,
+      turnReason: options.kind,
+      ...(players !== undefined ? { playerCount: players } : {}),
+      ...(options.parentSegmentId !== undefined
+        ? { parentSegmentId: options.parentSegmentId }
+        : {}),
+    });
+  }
+
+  function matchingRulesDiscussion(): DiscussionGroup | undefined {
+    return discussions.find(
+      (discussion) =>
+        discussion.kind === 'rules' &&
+        discussion.versionName.trim().toLowerCase() === rulesVersionName.trim().toLowerCase() &&
+        discussion.playerCount === rulesPlayerCount,
+    );
+  }
+
   function sendText(text: string) {
     const trimmed = text.trim();
     if (!trimmed || isSending) return;
     setDraft('');
+    if (unified && rulesMode) {
+      const title = trimmed.slice(0, 48);
+      const existing = matchingRulesDiscussion();
+      sendInto({
+        kind: 'rules',
+        versionName: rulesVersionName,
+        ...(rulesPlayerCount !== undefined ? { playerCount: rulesPlayerCount } : {}),
+        text: trimmed,
+        label: title,
+        title,
+        ...(existing !== undefined ? { existing } : {}),
+      });
+      return;
+    }
     if (unified) {
       const target = openDiscussion ?? visibleDiscussions[visibleDiscussions.length - 1];
       if (target !== undefined) {
-        setChosenDiscussionId(target.id);
+        const segmentId = newSegmentId();
+        reveal(target.id, segmentId);
         sendMessage.mutate({
           text: trimmed,
-          segmentId: newSegmentId(),
+          segmentId,
           segmentTitle: trimmed.slice(0, 48),
           ...discussionFields(target),
         });
@@ -206,15 +423,12 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
       }
       if (discussionFilter !== null) {
         const versionName = thread.gameName ?? thread.title;
-        const discussionId = newDiscussionId();
-        setChosenDiscussionId(discussionId);
-        sendMessage.mutate({
-          text: trimmed,
-          discussionId,
-          discussionTitle: discussionHeading(versionName, discussionFilter),
-          discussionKind: discussionFilter,
+        sendInto({
+          kind: discussionFilter,
           versionName,
-          turnReason: discussionFilter,
+          text: trimmed,
+          label: trimmed.slice(0, 48),
+          title: trimmed.slice(0, 48),
         });
         return;
       }
@@ -249,8 +463,12 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     ]);
   }
 
-  function openDiscussionForm(kind: DiscussionKind, prefillParent: boolean) {
-    const version = openDiscussion?.versionName ?? thread.gameName;
+  function openDiscussionForm(
+    kind: DiscussionKind,
+    prefillParent: boolean,
+    versionOverride?: string,
+  ) {
+    const version = versionOverride ?? openDiscussion?.versionName ?? thread.gameName;
     const owned =
       version !== undefined
         ? collectionGames.find((game) => game.name.toLowerCase() === version.toLowerCase())
@@ -266,11 +484,122 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   }
 
   function handleMoveToRules() {
-    if (unified) {
-      openDiscussionForm('rules', false);
+    if (!unified) {
+      setMenu('topics');
       return;
     }
-    setMenu('topics');
+    const source = setupTarget;
+    setRulesPick({
+      versionName: source?.versionName ?? thread.gameName ?? thread.title,
+      ...(source?.playerCount !== undefined ? { playerCount: source.playerCount } : {}),
+    });
+    setFaqOpen(false);
+    setExpandedFaq(null);
+    setChosenDiscussionId('');
+    setExpandedSegmentIds([]);
+    setFocusedSegmentKey(null);
+    setDiscussionFilter('rules');
+  }
+
+  function handleBackToSetup() {
+    const match = discussions.find(
+      (discussion) =>
+        discussion.kind === 'setup' &&
+        discussion.versionName.trim().toLowerCase() === rulesVersionName.trim().toLowerCase() &&
+        (rulesPlayerCount === undefined || discussion.playerCount === rulesPlayerCount),
+    );
+    const fallback = [...discussions].reverse().find((discussion) => discussion.kind === 'setup');
+    setDiscussionFilter('setup');
+    setFaqOpen(false);
+    setExpandedFaq(null);
+    setChosenDiscussionId('');
+    setExpandedSegmentIds([]);
+    setFocusedSegmentKey(null);
+    const next = match ?? fallback;
+    if (next !== undefined) {
+      setActiveDiscussionId(next.id);
+      return;
+    }
+    openDiscussionForm('setup', false, rulesVersionName);
+  }
+
+  function askRules(text: string, label: string, title: string) {
+    const existing = matchingRulesDiscussion();
+    sendInto({
+      kind: 'rules',
+      versionName: rulesVersionName,
+      ...(rulesPlayerCount !== undefined ? { playerCount: rulesPlayerCount } : {}),
+      text,
+      label,
+      title,
+      ...(existing !== undefined ? { existing } : {}),
+    });
+  }
+
+  function insertStrategies(items: WinningStrategy[]) {
+    const version = setupTarget?.versionName ?? thread.gameName ?? thread.title;
+    const players = setupTarget?.playerCount;
+    const segmentId = newSegmentId();
+    const title = Copy.chat.reply.popularStrategies;
+    const discussionId = setupTarget?.id ?? newDiscussionId();
+    reveal(discussionId, segmentId);
+    recordExchange.mutate({
+      question: `Popular strategies for ${version}.`,
+      answer: items
+        .map((item, index) => `${index + 1}. ${item.title}\n${item.summary}`)
+        .join('\n\n'),
+      label: title,
+      segmentId,
+      segmentTitle: title,
+      discussionId,
+      discussionTitle: setupTarget?.title ?? discussionHeading(version, 'setup', players),
+      discussionKind: 'setup',
+      versionName: version,
+      ...(players !== undefined ? { playerCount: players } : {}),
+    });
+  }
+
+  const popularRun =
+    setupTarget === undefined
+      ? undefined
+      : groupTopicRuns(setupTarget.messages, setupTarget.kind).find(
+          (piece) => piece.kind === 'segment' && piece.title === Copy.chat.reply.popularStrategies,
+        );
+  const popularSegment = popularRun?.kind === 'segment' ? popularRun : undefined;
+
+  async function openStrategies() {
+    const version = setupTarget?.versionName ?? thread.gameName;
+    if (version === undefined || version.length === 0) return;
+    if (popularSegment !== undefined && setupTarget !== undefined) {
+      reveal(setupTarget.id, popularSegment.id);
+      setStrategyRepeatAsk(true);
+      return;
+    }
+    let stored = profile.data?.winningStrategies ?? [];
+    if (stored.length === 0) {
+      try {
+        const result = await profile.refetch();
+        stored = result.data?.winningStrategies ?? [];
+      } catch {
+        stored = [];
+      }
+    }
+    if (stored.length > 0) {
+      insertStrategies(stored);
+      setStrategyRepeatAsk(true);
+      return;
+    }
+    setStrategyRepeatAsk(false);
+    const prompt = popularStrategiesPrompt(version);
+    sendInto({
+      kind: 'setup',
+      versionName: version,
+      ...(setupTarget?.playerCount !== undefined ? { playerCount: setupTarget.playerCount } : {}),
+      text: prompt.text,
+      label: prompt.label,
+      title: Copy.chat.reply.popularStrategies,
+      ...(setupTarget !== undefined ? { existing: setupTarget } : {}),
+    });
   }
 
   async function handleSwitchGame(selection: { gameId?: GameId; gameName: string }) {
@@ -339,9 +668,14 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   }
 
   function toggleSegment(id: string) {
-    setExpandedSegmentIds((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
+    setStrategyRepeatAsk(false);
+    if (expandedSegmentIds.includes(id)) {
+      setExpandedSegmentIds(expandedSegmentIds.filter((item) => item !== id));
+      if (focusedSegmentKey === id) setFocusedSegmentKey(null);
+      return;
+    }
+    setExpandedSegmentIds([...expandedSegmentIds, id]);
+    setFocusedSegmentKey(id);
   }
 
   const thinkingRow = sendMessage.isPending ? (
@@ -389,7 +723,10 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
         expanded,
       });
       if (!expanded) continue;
-      const pieces = groupTopicRuns(discussion.messages, discussion.kind, solvedIds);
+      const pieces = attachStrategyChildren(
+        groupTopicRuns(discussion.messages, discussion.kind),
+        Copy.chat.reply.popularStrategies,
+      );
       for (const piece of pieces) {
         if (piece.kind === 'segment') {
           gameRows.push({
@@ -398,86 +735,41 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
             id: `${discussion.id}-${piece.id}`,
             title: piece.title,
             messages: piece.messages,
+            children: piece.children.map((child) => ({
+              id: `${discussion.id}-${child.id}`,
+              title: child.title,
+              messages: child.messages,
+            })),
           });
         } else {
           gameRows.push({ key: piece.message.id, type: 'message', message: piece.message });
         }
       }
-      gameRows.push({
-        key: `actions-${discussion.id}`,
-        type: 'actions',
-        discussionId: discussion.id,
-      });
     }
   }
 
-  function replyFor(discussion: DiscussionGroup): React.JSX.Element | null {
-    const latest = [...discussion.messages]
-      .reverse()
-      .find((message) => message.role === 'assistant');
-    if (latest === undefined || sendMessage.isPending) return null;
-    const topicFollowup: ReplyFollowup | null =
-      latest.segmentId !== undefined &&
-      latest.segmentTitle !== undefined &&
-      !solvedIds.includes(latest.segmentId) &&
-      dismissedSegmentId !== latest.segmentId
-        ? { segmentId: latest.segmentId, segmentTitle: latest.segmentTitle }
-        : null;
-    return (
-      <ReplyActions
-        thread={{ ...thread, reason: discussion.kind }}
-        message={latest}
-        resetKey={latest.id}
-        messages={discussion.messages}
-        games={collectionGames}
-        disabled={isSending}
-        menu={menu}
-        followup={topicFollowup}
-        onSend={(text, label, segment) =>
-          sendMessage.mutate({
-            text,
-            label,
-            ...discussionFields(discussion),
-            ...(segment !== undefined
-              ? { segmentId: segment.id, segmentTitle: segment.title }
-              : {}),
-          })
-        }
-        onMenu={setMenu}
-        onMoveToRules={handleMoveToRules}
-        onDismissFollowup={() => {
-          if (topicFollowup !== null) setDismissedSegmentId(topicFollowup.segmentId);
-          setMenu('topics');
-        }}
-        onMarkSolved={(segment) => {
-          void handleMarkSolved(segment);
-        }}
-        onInsertFaq={handleInsertFaq}
-      />
-    );
-  }
-
-  const newDiscussionButton = unified ? (
-    <View className="mx-4 mb-3 gap-2">
-      {visibleDiscussions.length === 0 && (
-        <Text className="text-sm text-neutral-400">{Copy.chat.reply.gameChatEmpty}</Text>
-      )}
-      {(discussionFilter === null ? (['setup', 'rules'] as const) : [discussionFilter]).map(
-        (kind) => (
-          <TouchableOpacity
-            key={kind}
-            onPress={() => openDiscussionForm(kind, true)}
-            accessibilityRole="button"
-            className="rounded-2xl border border-[#818CF8] bg-[#818CF8]/15 px-4 py-3"
-          >
-            <Text className="text-center text-sm text-[#C7D2FE]">
-              {kind === 'setup' ? Copy.chat.reply.differentSetup : Copy.chat.reply.differentRules}
-            </Text>
-          </TouchableOpacity>
-        ),
-      )}
-    </View>
-  ) : null;
+  const newDiscussionButton =
+    unified && !rulesMode ? (
+      <View className="mx-4 mb-3 gap-2">
+        {visibleDiscussions.length === 0 && (
+          <Text className="text-sm text-neutral-400">{Copy.chat.reply.gameChatEmpty}</Text>
+        )}
+        {(discussionFilter === null ? (['setup', 'rules'] as const) : [discussionFilter]).map(
+          (kind) => (
+            <TouchableOpacity
+              key={kind}
+              onPress={() => openDiscussionForm(kind, true)}
+              accessibilityRole="button"
+              className="rounded-2xl border border-[#818CF8] bg-[#818CF8]/15 px-4 py-3"
+            >
+              <Text className="text-center text-sm text-[#C7D2FE]">
+                {kind === 'setup' ? Copy.chat.reply.differentSetup : Copy.chat.reply.differentRules}
+              </Text>
+            </TouchableOpacity>
+          ),
+        )}
+      </View>
+    ) : null;
 
   const replyActions =
     !unified && latestAssistant !== undefined && !sendMessage.isPending ? (
@@ -494,15 +786,31 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
         disabled={isSending}
         menu={menu}
         followup={followup}
-        onSend={(text, label, segment) =>
+        onSend={(text, label, segment) => {
+          if (segment !== undefined) setExpandedSegmentIds([segment.id]);
           sendMessage.mutate({
             text,
             label,
             ...(segment !== undefined
               ? { segmentId: segment.id, segmentTitle: segment.title }
               : {}),
-          })
-        }
+          });
+        }}
+        onInsertStrategies={(items) => {
+          const segmentId = newSegmentId();
+          const title = Copy.chat.reply.popularStrategies;
+          const game = thread.gameName ?? thread.title;
+          setExpandedSegmentIds([segmentId]);
+          recordExchange.mutate({
+            question: `Popular strategies for ${game}.`,
+            answer: items
+              .map((item, index) => `${index + 1}. ${item.title}\n${item.summary}`)
+              .join('\n\n'),
+            label: title,
+            segmentId,
+            segmentTitle: title,
+          });
+        }}
         onMenu={setMenu}
         onMoveToRules={() => {
           void handleMoveToRules();
@@ -523,48 +831,71 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
       style={{ flex: 1, backgroundColor: '#0F0F0F', paddingTop: insets.top }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View className="flex-row items-center gap-2 border-b border-[#2A2A2A] px-3 pb-2 pt-1">
-        <TouchableOpacity
-          onPress={onBack}
-          className="px-2 py-1"
-          accessibilityRole="button"
-          accessibilityLabel={Copy.tabs.chat}
-        >
-          <Text className="text-lg text-neutral-300">‹</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          className="flex-1"
-          disabled={!canSwitchGame}
-          onPress={() => setSwitchOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={Copy.chat.reply.changeGame}
-        >
-          <Text className="text-base font-semibold text-[#F9F9F9]" numberOfLines={1}>
-            {REASON_EMOJI[thread.gameKey !== undefined ? 'general' : thread.reason]} {thread.title}
-            {canSwitchGame ? '  ▾' : ''}
-          </Text>
-          {thread.gameKey !== undefined && discussionFilter !== null ? (
-            <Text className="text-xs text-neutral-500" numberOfLines={1}>
-              {discussionFilter === 'setup' ? Copy.chat.reasons.setup : Copy.chat.reasons.rules}
-            </Text>
-          ) : (
-            thread.gameName !== undefined &&
-            thread.gameName !== thread.title && (
-              <Text className="text-xs text-neutral-500" numberOfLines={1}>
-                {thread.gameName}
-              </Text>
-            )
-          )}
-        </TouchableOpacity>
-        {messages.length > 0 && (
+      <View className="border-b border-[#2A2A2A] pb-2">
+        <View className="flex-row items-center gap-2 px-3 pt-1">
           <TouchableOpacity
-            onPress={handleClear}
+            onPress={onBack}
             className="px-2 py-1"
             accessibilityRole="button"
-            accessibilityLabel={Copy.chat.clearConversation}
+            accessibilityLabel={Copy.tabs.chat}
           >
-            <Text className="text-sm text-neutral-400">{Copy.chat.clearConversation}</Text>
+            <Text className="text-lg text-neutral-300">‹</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            className="flex-1"
+            disabled={!canSwitchGame}
+            onPress={() => setSwitchOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={Copy.chat.reply.changeGame}
+          >
+            <Text className="text-base font-semibold text-[#F9F9F9]" numberOfLines={1}>
+              {REASON_EMOJI[thread.gameKey !== undefined ? 'general' : thread.reason]}{' '}
+              {thread.title}
+              {canSwitchGame ? '  ▾' : ''}
+            </Text>
+            {thread.gameKey !== undefined && discussionFilter !== null ? (
+              <Text className="text-xs text-neutral-500" numberOfLines={1}>
+                {discussionFilter === 'setup' ? Copy.chat.reasons.setup : Copy.chat.reasons.rules}
+              </Text>
+            ) : (
+              thread.gameName !== undefined &&
+              thread.gameName !== thread.title && (
+                <Text className="text-xs text-neutral-500" numberOfLines={1}>
+                  {thread.gameName}
+                </Text>
+              )
+            )}
+          </TouchableOpacity>
+          {messages.length > 0 && (
+            <TouchableOpacity
+              onPress={handleClear}
+              className="px-2 py-1"
+              accessibilityRole="button"
+              accessibilityLabel={Copy.chat.clearConversation}
+            >
+              <Text className="text-sm text-neutral-400">{Copy.chat.clearConversation}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {unified && thread.gameName !== undefined && (
+          <GameContextCard gameName={thread.gameName} game={contextGame} />
+        )}
+        {rulesMode && (
+          <RulesContextBar
+            playerChips={rulesPlayerChips}
+            playerCount={rulesPlayerCount}
+            versions={versionChoices}
+            versionName={rulesVersionName}
+            onPlayerCount={(count) =>
+              setRulesPick({ versionName: rulesVersionName, playerCount: count })
+            }
+            onVersion={(name) =>
+              setRulesPick({
+                versionName: name,
+                ...(rulesPlayerCount !== undefined ? { playerCount: rulesPlayerCount } : {}),
+              })
+            }
+          />
         )}
       </View>
 
@@ -606,30 +937,84 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
                             id: block.id,
                             title: block.title,
                             messages: block.messages,
+                            children: [],
                           }
                         : { key: block.message.id, type: 'message', message: block.message },
                   )
             }
             keyExtractor={(item) => item.key}
-            extraData={`${expandedSegmentIds.join('|')}:${menu}:${followup?.segmentId ?? ''}:${sendMessage.isPending}:${openDiscussionId ?? ''}`}
+            extraData={`${expandedSegmentIds.join('|')}:${focusedSegmentKey ?? ''}:${menu}:${followup?.segmentId ?? ''}:${sendMessage.isPending}:${openDiscussionId ?? ''}:${replyLayer}:${faqOpen}:${strategyRepeatAsk}:${rulesVersionName}:${rulesPlayerCount ?? ''}`}
             renderItem={({ item }) => {
               if (item.type === 'discussion') {
                 return (
-                  <TouchableOpacity
-                    onPress={() => setChosenDiscussionId(item.expanded ? '' : item.id)}
-                    accessibilityRole="button"
-                    className="mx-4 my-1 rounded-2xl border border-[#2A2A2A] bg-[#141414] px-4 py-3"
-                  >
-                    <Text className="text-sm font-semibold text-[#F9F9F9]">{item.title}</Text>
-                    <Text className="mt-1 text-xs text-[#C7D2FE]">
-                      {item.expanded
-                        ? Copy.chat.reply.solvedCollapse
-                        : Copy.chat.reply.solvedExpand}
-                    </Text>
-                  </TouchableOpacity>
+                  <View className="mx-4 my-1.5 overflow-hidden rounded-2xl">
+                    <CollapseBar
+                      title={item.title}
+                      expanded={item.expanded}
+                      onPress={() => {
+                        if (item.expanded) {
+                          setChosenDiscussionId('');
+                          setExpandedSegmentIds([]);
+                          setFocusedSegmentKey(null);
+                          setStrategyRepeatAsk(false);
+                          return;
+                        }
+                        setChosenDiscussionId(item.id);
+                        setActiveDiscussionId(item.id);
+                        setExpandedSegmentIds([]);
+                        setFocusedSegmentKey(null);
+                      }}
+                    />
+                  </View>
                 );
               }
               if (item.type === 'segment') {
+                if (unified) {
+                  const topicCard = (
+                    id: string,
+                    title: string,
+                    cardMessages: ChatMessage[],
+                    indent: boolean,
+                  ) => {
+                    const assistants = cardMessages.filter(
+                      (message) => message.role === 'assistant',
+                    );
+                    return (
+                      <TopicPreview
+                        key={id}
+                        title={title}
+                        preview={previewSentences(assistants[0]?.content ?? '')}
+                        expanded={expandedSegmentIds.includes(id)}
+                        indent={indent}
+                        onPress={() => toggleSegment(id)}
+                      >
+                        {assistants.length === 0 && sendMessage.isPending ? (
+                          <Text className="mt-2 text-sm text-neutral-400">
+                            {Copy.chat.thinking}
+                          </Text>
+                        ) : (
+                          assistants.map((message) => (
+                            <Text
+                              key={message.id}
+                              onLongPress={() => handleDeleteMessage(message)}
+                              className="mt-3 text-sm leading-relaxed text-[#F4F6FB]"
+                            >
+                              {message.content}
+                            </Text>
+                          ))
+                        )}
+                      </TopicPreview>
+                    );
+                  };
+                  return (
+                    <View>
+                      {topicCard(item.id, item.title, item.messages, false)}
+                      {item.children.map((child) =>
+                        topicCard(child.id, child.title, child.messages, true),
+                      )}
+                    </View>
+                  );
+                }
                 return (
                   <SolvedSegmentCard
                     title={item.title}
@@ -640,21 +1025,144 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
                   />
                 );
               }
-              if (item.type === 'actions') {
-                const discussion = visibleDiscussions.find(
-                  (entry) => entry.id === item.discussionId,
-                );
-                return discussion !== undefined ? replyFor(discussion) : null;
-              }
               return <MessageBubble message={item.message} onLongPress={handleDeleteMessage} />;
             }}
             ListHeaderComponent={
-              thread.gameName !== undefined ? (
+              !unified && thread.gameName !== undefined ? (
                 <GameContextCard gameName={thread.gameName} game={contextGame} />
               ) : null
             }
             ListFooterComponent={
               <>
+                {rulesMode && faqOpen && (
+                  <View>
+                    {profile.isFetching && (
+                      <View className="mx-4 mb-2 flex-row items-center gap-2">
+                        <ActivityIndicator color="#818CF8" size="small" />
+                        <Text className="text-sm text-neutral-400">
+                          {Copy.intent.rulesHelper.faqLoading}
+                        </Text>
+                      </View>
+                    )}
+                    {profile.isError && (
+                      <Text className="mx-4 mb-2 text-sm text-red-400">
+                        {Copy.intent.rulesHelper.faqError}
+                      </Text>
+                    )}
+                    {profile.data !== undefined &&
+                      profile.data.rulesFaq.length === 0 &&
+                      !profile.isFetching && (
+                        <Text className="mx-4 mb-2 text-sm text-neutral-400">
+                          {Copy.intent.rulesHelper.faqEmpty}
+                        </Text>
+                      )}
+                    {profile.data?.rulesFaq.map((item) => (
+                      <TopicPreview
+                        key={item.question}
+                        title={item.question}
+                        preview={previewSentences(item.answer)}
+                        expanded={expandedFaq === item.question}
+                        onPress={() =>
+                          setExpandedFaq((current) =>
+                            current === item.question ? null : item.question,
+                          )
+                        }
+                      >
+                        <Text className="mt-2 text-sm leading-relaxed text-[#F4F6FB]">
+                          {item.answer}
+                        </Text>
+                      </TopicPreview>
+                    ))}
+                  </View>
+                )}
+                {(setupMode || rulesMode) && (
+                  <GameReplyBar
+                    layer={replyLayer}
+                    strategyTitles={strategyNameList}
+                    disabled={isSending}
+                    faqOpen={faqOpen}
+                    repeatAsk={
+                      strategyRepeatAsk && focusedTitle === Copy.chat.reply.popularStrategies
+                    }
+                    onPopularStrategies={() => {
+                      void openStrategies();
+                    }}
+                    onMoreStrategyDetail={() => setStrategyRepeatAsk(false)}
+                    onDifferentStrategies={() => {
+                      const version = setupTarget?.versionName ?? thread.gameName;
+                      if (version === undefined) return;
+                      setStrategyRepeatAsk(false);
+                      const prompt = differentStrategiesPrompt(version, strategyNameList);
+                      sendInto({
+                        kind: 'setup',
+                        versionName: version,
+                        ...(setupTarget?.playerCount !== undefined
+                          ? { playerCount: setupTarget.playerCount }
+                          : {}),
+                        text: prompt.text,
+                        label: prompt.label,
+                        title: Copy.chat.reply.differentStrategies,
+                        ...(setupTarget !== undefined ? { existing: setupTarget } : {}),
+                        ...(popularSegment !== undefined
+                          ? { parentSegmentId: popularSegment.id }
+                          : {}),
+                      });
+                    }}
+                    onMoveToRules={handleMoveToRules}
+                    onSetupDepth={(depth) => {
+                      const version = setupTarget?.versionName ?? thread.gameName;
+                      if (version === undefined) return;
+                      const prompt = setupDepthPrompt(version, depth, setupTarget?.playerCount);
+                      const title =
+                        depth === 'basic'
+                          ? Copy.chat.reply.setupFifteen
+                          : Copy.chat.reply.setupFull;
+                      sendInto({
+                        kind: 'setup',
+                        versionName: version,
+                        ...(setupTarget?.playerCount !== undefined
+                          ? { playerCount: setupTarget.playerCount }
+                          : {}),
+                        text: prompt.text,
+                        label: prompt.label,
+                        title,
+                        ...(setupTarget !== undefined ? { existing: setupTarget } : {}),
+                      });
+                    }}
+                    onStrategyDetail={(title) => {
+                      const version = setupTarget?.versionName ?? thread.gameName;
+                      if (version === undefined) return;
+                      const prompt = strategyFocusPrompt(version, title);
+                      sendInto({
+                        kind: 'setup',
+                        versionName: version,
+                        ...(setupTarget?.playerCount !== undefined
+                          ? { playerCount: setupTarget.playerCount }
+                          : {}),
+                        text: prompt.text,
+                        label: prompt.label,
+                        title,
+                        ...(setupTarget !== undefined ? { existing: setupTarget } : {}),
+                        ...(popularSegment !== undefined
+                          ? { parentSegmentId: popularSegment.id }
+                          : {}),
+                      });
+                    }}
+                    onBackToSetup={handleBackToSetup}
+                    onCoreMechanics={() => {
+                      const prompt = coreMechanicsPrompt(rulesVersionName, rulesPlayerCount);
+                      askRules(prompt.text, prompt.label, Copy.chat.reply.coreMechanics);
+                    }}
+                    onPayAttention={() => {
+                      const prompt = payAttentionPrompt(rulesVersionName, rulesPlayerCount);
+                      askRules(prompt.text, prompt.label, Copy.chat.reply.payAttention);
+                    }}
+                    onFaq={() => {
+                      setFaqOpen((open) => !open);
+                      setExpandedFaq(null);
+                    }}
+                  />
+                )}
                 {replyActions}
                 {newDiscussionButton}
               </>

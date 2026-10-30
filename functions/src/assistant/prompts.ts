@@ -36,6 +36,7 @@ Use type "recommendation".`;
 
 const RULES_CONTEXT = `The user has a rules question about a specific game.
 Be precise. Reference specific mechanics, card names, or phases if mentioned.
+Answer from the base game and its expansions together. When a card, score, or rule exists only in an expansion, name that expansion and say it is not in the base game.
 When a "Focused game" block is provided, use its player count, time, weight, categories, and mechanics as ground truth.
 If no focused-game metadata is provided, answer for the most common / standard ruleset and state that assumption briefly.
 If the question is ambiguous or you're unsure, say so honestly.

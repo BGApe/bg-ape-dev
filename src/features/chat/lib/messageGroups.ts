@@ -1,12 +1,21 @@
+import { Copy } from '@/constants/copy';
 import { detectPlayerCount } from '@/features/assistant/lib/collectionContext';
 
 import type { ChatMessage, DiscussionKind } from '../types';
 
 import { discussionHeading, openingTopicTitle, versionNameFromPrompt } from './gameThread';
+import { strategyTitles } from './previewText';
 
-export type MessageBlock =
-  | { kind: 'message'; message: ChatMessage }
-  | { kind: 'segment'; id: string; title: string; messages: ChatMessage[] };
+export type TopicSegment = {
+  kind: 'segment';
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  parentSegmentId?: string;
+  children: TopicSegment[];
+};
+
+export type MessageBlock = { kind: 'message'; message: ChatMessage } | TopicSegment;
 
 export type DiscussionGroup = {
   id: string;
@@ -65,18 +74,12 @@ function dropRepeatedExchanges(messages: ChatMessage[]): ChatMessage[] {
   return kept;
 }
 
-/**
- * Earlier topics collapse as soon as a later one starts.
- * The latest topic stays open unless it was marked solved.
- */
-export function groupTopicRuns(
-  messages: ChatMessage[],
-  kind: DiscussionKind,
-  forceClosedIds: readonly string[] = [],
-): MessageBlock[] {
+/** Every topic starts collapsed, including the latest one. */
+export function groupTopicRuns(messages: ChatMessage[], kind: DiscussionKind): MessageBlock[] {
   const firstUser = messages.find((message) => message.role === 'user');
   const openingTitle = openingTopicTitle(kind, firstUser?.content ?? '');
-  const runs: { id: string; title: string; messages: ChatMessage[] }[] = [];
+  const runs: { id: string; title: string; messages: ChatMessage[]; parentSegmentId?: string }[] =
+    [];
   for (const message of messages) {
     const id = message.segmentId ?? 'opening';
     const title = message.segmentTitle ?? (id === 'opening' ? openingTitle : 'Follow-up');
@@ -86,23 +89,65 @@ export function groupTopicRuns(
       if (message.segmentTitle !== undefined && message.segmentTitle.length > 0) {
         last.title = message.segmentTitle;
       }
+      if (last.parentSegmentId === undefined && message.parentSegmentId !== undefined) {
+        last.parentSegmentId = message.parentSegmentId;
+      }
       continue;
     }
-    runs.push({ id, title, messages: [message] });
+    const run: { id: string; title: string; messages: ChatMessage[]; parentSegmentId?: string } = {
+      id,
+      title,
+      messages: [message],
+    };
+    if (message.parentSegmentId !== undefined) run.parentSegmentId = message.parentSegmentId;
+    runs.push(run);
   }
 
-  const lastId = runs[runs.length - 1]?.id;
-  const forced = new Set(forceClosedIds);
-  const blocks: MessageBlock[] = [];
-  for (const run of runs) {
-    const closed = run.id !== lastId || forced.has(run.id);
-    if (!closed) {
-      for (const message of run.messages) blocks.push({ kind: 'message', message });
-      continue;
-    }
-    blocks.push({ kind: 'segment', id: run.id, title: run.title, messages: run.messages });
-  }
-  return blocks;
+  return runs.map((run) => {
+    const segment: TopicSegment = {
+      kind: 'segment',
+      id: run.id,
+      title: run.title,
+      messages: run.messages,
+      children: [],
+    };
+    if (run.parentSegmentId !== undefined) segment.parentSegmentId = run.parentSegmentId;
+    return segment;
+  });
+}
+
+/** Pulls strategy follow-ups under the popular-strategies card. */
+export function attachStrategyChildren(
+  blocks: MessageBlock[],
+  popularTitle: string,
+): MessageBlock[] {
+  const segments = blocks.filter((block): block is TopicSegment => block.kind === 'segment');
+  const parent = segments.find((segment) => segment.title === popularTitle);
+  if (parent === undefined) return blocks;
+
+  const known = new Set(
+    strategyTitles(
+      parent.messages
+        .filter((message) => message.role === 'assistant')
+        .map((message) => message.content)
+        .join('\n'),
+    ),
+  );
+  const children = segments.filter((segment) => {
+    if (segment.id === parent.id) return false;
+    return (
+      segment.parentSegmentId === parent.id ||
+      known.has(segment.title) ||
+      segment.title === Copy.chat.reply.differentStrategies
+    );
+  });
+  const childIds = new Set(children.map((segment) => segment.id));
+  return blocks.flatMap((block): MessageBlock[] => {
+    if (block.kind !== 'segment') return [block];
+    if (childIds.has(block.id)) return [];
+    if (block.id !== parent.id) return [block];
+    return [{ ...block, children }];
+  });
 }
 
 const LEGACY_DISCUSSION = 'legacy';
@@ -176,7 +221,7 @@ export function groupSolvedSegments(
         }
         index += 1;
       }
-      blocks.push({ kind: 'segment', id: segmentId, title, messages: grouped });
+      blocks.push({ kind: 'segment', id: segmentId, title, messages: grouped, children: [] });
       continue;
     }
     blocks.push({ kind: 'message', message: current });

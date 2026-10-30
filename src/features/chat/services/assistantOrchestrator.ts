@@ -31,6 +31,7 @@ type AssistantTurnExtras = {
   /** Follow-up block this turn belongs to, so it can collapse with its question. */
   segmentId?: string;
   segmentTitle?: string;
+  parentSegmentId?: string;
   discussionId?: string;
   discussionTitle?: string;
   discussionKind?: 'setup' | 'rules';
@@ -97,6 +98,7 @@ export async function runAssistantTurn(
       ...(msg.suggestedGames !== undefined ? { suggestedGames: msg.suggestedGames } : {}),
       ...(extras.segmentId !== undefined ? { segmentId: extras.segmentId } : {}),
       ...(extras.segmentTitle !== undefined ? { segmentTitle: extras.segmentTitle } : {}),
+      ...(extras.parentSegmentId !== undefined ? { parentSegmentId: extras.parentSegmentId } : {}),
       ...(extras.discussionId !== undefined ? { discussionId: extras.discussionId } : {}),
       ...(extras.discussionTitle !== undefined ? { discussionTitle: extras.discussionTitle } : {}),
       ...(extras.discussionKind !== undefined ? { discussionKind: extras.discussionKind } : {}),

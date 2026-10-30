@@ -1,22 +1,25 @@
 import { useRouter } from 'expo-router';
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 
 import { Copy } from '@/constants/copy';
 import { Routes } from '@/constants/routes';
 import { useBggGameProfile } from '@/features/collection/hooks/useBggGameProfile';
 import type { CollectionGame } from '@/features/collection/types';
-import type { RulesFaqItem } from '@/services/bgg/gameProfile';
+import type { RulesFaqItem, WinningStrategy } from '@/services/bgg/gameProfile';
 
 import { newSegmentId } from '../lib/messageGroups';
 import {
   comparePrompt,
+  detailedSetupPrompt,
   elaboratePrompt,
   moreGamesPrompt,
   moreInfoPrompt,
   playerCountFromMessages,
+  popularStrategiesPrompt,
   quickOverviewPrompt,
+  strategyDetailPrompt,
   topicFollowupPrompt,
 } from '../lib/replyPrompts';
 import { previouslySuggestedGames } from '../lib/suggestedGames';
@@ -52,6 +55,7 @@ type Props = {
   onDismissFollowup: () => void;
   onMarkSolved: (segment: ReplyFollowup) => void;
   onInsertFaq: (item: RulesFaqItem) => void;
+  onInsertStrategies: (items: WinningStrategy[]) => void;
 };
 
 function ActionButton({
@@ -80,6 +84,11 @@ function findOwnedGame(games: CollectionGame[], name: string): CollectionGame | 
   return games.find((game) => game.kind !== 'expansion' && game.name.toLowerCase() === key);
 }
 
+function findNamedGame(games: CollectionGame[], name: string): CollectionGame | undefined {
+  const key = name.trim().toLowerCase();
+  return games.find((game) => game.name.toLowerCase() === key);
+}
+
 export function ReplyActions({
   thread,
   message,
@@ -95,16 +104,21 @@ export function ReplyActions({
   onDismissFollowup,
   onMarkSolved,
   onInsertFaq,
+  onInsertStrategies,
 }: Props): React.JSX.Element | null {
   const router = useRouter();
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [faqOpen, setFaqOpen] = useState(false);
   const gameName = thread.gameName;
   const owned = gameName !== undefined ? findOwnedGame(games, gameName) : undefined;
+  const named = gameName !== undefined ? findNamedGame(games, gameName) : undefined;
+  const profileGame = named ?? owned;
   const profile = useBggGameProfile(
-    faqOpen && gameName !== undefined && gameName.length > 2
-      ? owned?.bggId !== undefined
-        ? { bggId: owned.bggId }
+    gameName !== undefined &&
+      gameName.length > 2 &&
+      (thread.reason === 'setup' || thread.reason === 'rules' || faqOpen)
+      ? profileGame?.bggId !== undefined
+        ? { bggId: profileGame.bggId }
         : { name: gameName }
       : null,
   );
@@ -199,10 +213,58 @@ export function ReplyActions({
 
   const showSetup = thread.reason === 'setup' && followup === null;
   const showTopics = followup === null && (menu === 'topics' || thread.reason === 'rules');
+  const strategyFollowup = followup?.segmentTitle === C.popularStrategies;
+
+  function sendDetailedSetup() {
+    if (gameName === undefined) return;
+    const prompt = detailedSetupPrompt(gameName);
+    onSend(prompt.text, prompt.label, { id: newSegmentId(), title: C.detailedSetupTitle });
+  }
+
+  async function openStrategies() {
+    if (gameName === undefined) return;
+    let stored = profile.data?.winningStrategies ?? [];
+    if (stored.length === 0) {
+      try {
+        const result = await profile.refetch();
+        stored = result.data?.winningStrategies ?? [];
+      } catch {
+        stored = [];
+      }
+    }
+    if (stored.length > 0) {
+      onInsertStrategies(stored);
+      return;
+    }
+    const prompt = popularStrategiesPrompt(gameName);
+    onSend(prompt.text, prompt.label, { id: newSegmentId(), title: C.popularStrategies });
+  }
 
   return (
     <View className="mx-4 mb-2 max-w-[90%]">
-      {followup !== null && gameName !== undefined && (
+      {strategyFollowup && followup !== null && gameName !== undefined && (
+        <View className="flex-row flex-wrap">
+          <ActionButton
+            label={C.trackPlay}
+            disabled={disabled}
+            onPress={() => Alert.alert(C.trackPlay, C.trackPlayBody)}
+          />
+          <ActionButton
+            label={C.strategyDetail}
+            disabled={disabled}
+            onPress={() => {
+              const prompt = strategyDetailPrompt(gameName);
+              onSend(prompt.text, prompt.label, {
+                id: followup.segmentId,
+                title: followup.segmentTitle,
+              });
+            }}
+          />
+          <ActionButton label={C.toRules} disabled={disabled} onPress={onMoveToRules} />
+        </View>
+      )}
+
+      {followup !== null && !strategyFollowup && gameName !== undefined && (
         <View className="flex-row flex-wrap">
           <ActionButton
             label={C.somethingElse}
@@ -234,19 +296,21 @@ export function ReplyActions({
       {showSetup && (
         <View className="flex-row flex-wrap">
           <ActionButton
+            label={C.moreSetupHelp}
+            disabled={disabled || gameName === undefined}
+            onPress={sendDetailedSetup}
+          />
+          <ActionButton
+            label={C.popularStrategies}
+            disabled={disabled || gameName === undefined}
+            onPress={() => {
+              void openStrategies();
+            }}
+          />
+          <ActionButton
             label={C.toRules}
             disabled={disabled || gameName === undefined}
             onPress={onMoveToRules}
-          />
-          <ActionButton
-            label={C.moreRulesHelp}
-            disabled={disabled || gameName === undefined}
-            onPress={() => onMenu(menu === 'topics' ? 'root' : 'topics')}
-          />
-          <ActionButton
-            label={C.specificRule}
-            disabled={disabled || gameName === undefined}
-            onPress={() => setFaqOpen((open) => !open)}
           />
         </View>
       )}

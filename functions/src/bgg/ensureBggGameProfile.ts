@@ -20,9 +20,11 @@ const bggApiToken = defineSecret('BGG_API_TOKEN');
 
 const BGG_BASE = 'https://boardgamegeek.com/xmlapi2';
 const FAQ_COUNT = 5;
+const STRATEGY_COUNT = 3;
 
 type RulesFaqItem = { question: string; answer: string };
 type GameplayQuestion = { topic: string; question: string; answer: string };
+type WinningStrategy = { title: string; summary: string };
 
 type GameProfile = {
   bggId: number;
@@ -34,11 +36,13 @@ type GameProfile = {
   averageWeight?: number;
   bggRating?: number;
   bggRank?: number;
+  usersRated?: number;
   thumbnailUrl?: string;
   categories: string[];
   mechanics: string[];
   rulesFaq: RulesFaqItem[];
   gameplayQuestions: GameplayQuestion[];
+  winningStrategies: WinningStrategy[];
   updatedAt: number;
 };
 
@@ -145,7 +149,7 @@ function valueAttr(node: unknown): number | string | undefined {
 function parseThing(
   xml: string,
   bggId: number,
-): Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'updatedAt'> | null {
+): Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'winningStrategies' | 'updatedAt'> | null {
   const root = asRecord(parser.parse(xml));
   const items = asRecord(root?.['items']);
   const item = asRecord(asArray(items?.['item'])[0]);
@@ -173,9 +177,10 @@ function parseThing(
   const averageWeight = toNum(ratings?.['averageweight'] ? valueAttr(ratings['averageweight']) : undefined);
   const bggRating = toNum(ratings?.['average'] ? valueAttr(ratings['average']) : undefined);
   const bggRank = toNum(rankNode?.['value']);
+  const usersRated = toNum(ratings?.['usersrated'] ? valueAttr(ratings['usersrated']) : undefined);
   const thumbnailUrl = toStr(item['thumbnail']);
 
-  const profile: Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'updatedAt'> = {
+  const profile: Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'winningStrategies' | 'updatedAt'> = {
     bggId,
     name,
     categories: linkValues(item, 'boardgamecategory').slice(0, 24),
@@ -188,6 +193,7 @@ function parseThing(
   if (averageWeight !== undefined) profile.averageWeight = averageWeight;
   if (bggRating !== undefined) profile.bggRating = bggRating;
   if (bggRank !== undefined && bggRank > 0) profile.bggRank = bggRank;
+  if (usersRated !== undefined && usersRated > 0) profile.usersRated = usersRated;
   if (thumbnailUrl !== undefined) profile.thumbnailUrl = thumbnailUrl;
   return profile;
 }
@@ -208,13 +214,20 @@ function parseSearchId(xml: string, preferredName: string): number | null {
   return fallback;
 }
 
-function parseRulesForumId(xml: string): number | null {
+function parseForumId(xml: string, kind: 'rules' | 'strategy'): number | null {
   const root = asRecord(parser.parse(xml));
   const forums = asArray(asRecord(root?.['forums'])?.['forum']).map(asRecord);
-  const rules =
-    forums.find((forum) => toStr(forum?.['title'])?.toLowerCase() === 'rules') ??
-    forums.find((forum) => toStr(forum?.['title'])?.toLowerCase().includes('rule'));
-  return toNum(rules?.['id']) ?? null;
+  const titled = forums.map((forum) => ({
+    id: toNum(forum?.['id']),
+    title: toStr(forum?.['title'])?.toLowerCase() ?? '',
+  }));
+  const match =
+    kind === 'rules'
+      ? titled.find((forum) => forum.title === 'rules') ??
+        titled.find((forum) => forum.title.includes('rule'))
+      : titled.find((forum) => forum.title === 'strategy') ??
+        titled.find((forum) => forum.title.includes('strateg'));
+  return match?.id ?? null;
 }
 
 function parseThreadTitles(xml: string): string[] {
@@ -257,6 +270,15 @@ function readStoredProfile(raw: unknown): GameProfile | null {
     gameplayQuestions.push({ topic, question, answer });
   }
 
+  const winningStrategies: WinningStrategy[] = [];
+  for (const item of asArray(data['winningStrategies'])) {
+    const node = asRecord(item);
+    const title = toStr(node?.['title']);
+    const summary = toStr(node?.['summary']);
+    if (!title || !summary) continue;
+    winningStrategies.push({ title, summary });
+  }
+
   const profile: GameProfile = {
     bggId,
     name,
@@ -264,6 +286,7 @@ function readStoredProfile(raw: unknown): GameProfile | null {
     mechanics: asArray(data['mechanics']).map(toStr).filter((v): v is string => v !== undefined),
     rulesFaq,
     gameplayQuestions,
+    winningStrategies,
     updatedAt: toNum(data['updatedAt']) ?? 0,
   };
   const yearPublished = toNum(data['yearPublished']);
@@ -273,6 +296,7 @@ function readStoredProfile(raw: unknown): GameProfile | null {
   const averageWeight = toNum(data['averageWeight']);
   const bggRating = toNum(data['bggRating']);
   const bggRank = toNum(data['bggRank']);
+  const usersRated = toNum(data['usersRated']);
   const thumbnailUrl = toStr(data['thumbnailUrl']);
   if (yearPublished !== undefined) profile.yearPublished = yearPublished;
   if (minPlayers !== undefined) profile.minPlayers = minPlayers;
@@ -281,6 +305,7 @@ function readStoredProfile(raw: unknown): GameProfile | null {
   if (averageWeight !== undefined) profile.averageWeight = averageWeight;
   if (bggRating !== undefined) profile.bggRating = bggRating;
   if (bggRank !== undefined) profile.bggRank = bggRank;
+  if (usersRated !== undefined && usersRated > 0) profile.usersRated = usersRated;
   if (thumbnailUrl !== undefined) profile.thumbnailUrl = thumbnailUrl;
   return profile;
 }
@@ -293,6 +318,7 @@ function profilePayload(profile: GameProfile): Record<string, unknown> {
     mechanics: profile.mechanics,
     rulesFaq: profile.rulesFaq,
     gameplayQuestions: profile.gameplayQuestions,
+    winningStrategies: profile.winningStrategies,
     updatedAt: profile.updatedAt,
   };
   if (profile.yearPublished !== undefined) payload['yearPublished'] = profile.yearPublished;
@@ -302,12 +328,13 @@ function profilePayload(profile: GameProfile): Record<string, unknown> {
   if (profile.averageWeight !== undefined) payload['averageWeight'] = profile.averageWeight;
   if (profile.bggRating !== undefined) payload['bggRating'] = profile.bggRating;
   if (profile.bggRank !== undefined) payload['bggRank'] = profile.bggRank;
+  if (profile.usersRated !== undefined) payload['usersRated'] = profile.usersRated;
   if (profile.thumbnailUrl !== undefined) payload['thumbnailUrl'] = profile.thumbnailUrl;
   return payload;
 }
 
 async function buildFaq(
-  profile: Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'updatedAt'>,
+  profile: Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'winningStrategies' | 'updatedAt'>,
   threadTitles: string[],
   apiKey: string,
 ): Promise<RulesFaqItem[]> {
@@ -353,6 +380,68 @@ Answers must state the correct ruling plainly.`,
   return items;
 }
 
+const STRATEGY_SCHEMA: ObjectSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    items: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          title: { type: SchemaType.STRING } as unknown as Schema,
+          summary: { type: SchemaType.STRING } as unknown as Schema,
+        },
+        required: ['title', 'summary'],
+      } as unknown as Schema,
+    } as unknown as Schema,
+  },
+  required: ['items'],
+};
+
+async function buildStrategies(
+  profile: Omit<GameProfile, 'rulesFaq' | 'gameplayQuestions' | 'winningStrategies' | 'updatedAt'>,
+  threadTitles: string[],
+  apiKey: string,
+): Promise<WinningStrategy[]> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    systemInstruction: `You write the top ${STRATEGY_COUNT} winning strategies for one board game.
+You may receive titles of threads from that game's BoardGameGeek strategy forum. Use the titles only as clues.
+Do not quote forum posts. Each strategy needs a short title and a summary of 3 to 4 sentences about how it scores or wins.
+Keep the three strategies distinct.`,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: STRATEGY_SCHEMA,
+      temperature: 0.4,
+      maxOutputTokens: 4_096,
+      ...({ thinkingConfig: { thinkingLevel: 'MINIMAL' } } as object),
+    },
+  });
+
+  const lines = [
+    `Game: ${profile.name}`,
+    profile.mechanics.length > 0 ? `Mechanics: ${profile.mechanics.join(', ')}` : '',
+    threadTitles.length > 0
+      ? `Strategy-forum thread titles:\n${threadTitles.map((title) => `- ${title}`).join('\n')}`
+      : 'No forum titles were available.',
+  ].filter((line) => line.length > 0);
+
+  const result = await model.generateContent(lines.join('\n'));
+  const raw = result.response.text();
+  const parsed = JSON.parse(raw) as { items?: unknown };
+  const items: WinningStrategy[] = [];
+  for (const item of asArray(parsed.items)) {
+    const node = asRecord(item);
+    const title = toStr(node?.['title'])?.slice(0, 80);
+    const summary = toStr(node?.['summary'])?.slice(0, 700);
+    if (!title || !summary) continue;
+    items.push({ title, summary });
+    if (items.length >= STRATEGY_COUNT) break;
+  }
+  return items;
+}
+
 function validateInput(data: unknown): { bggId?: number; name?: string } {
   const record = asRecord(data);
   if (!record) throw new HttpsError('invalid-argument', 'Request body must be an object.');
@@ -382,7 +471,7 @@ export const ensureBggGameProfile = onCall(
     region: 'europe-west10',
     enforceAppCheck: true,
     secrets: [geminiApiKey, bggApiToken],
-    timeoutSeconds: 60,
+    timeoutSeconds: 90,
   },
   async (request) => {
     if (!request.auth) {
@@ -412,7 +501,9 @@ export const ensureBggGameProfile = onCall(
     const ref = db.collection('bggGames').doc(String(bggId));
     const existingSnap = await ref.get();
     const existing = existingSnap.exists ? readStoredProfile(existingSnap.data()) : null;
-    if (existing && existing.rulesFaq.length > 0) {
+    const needsFaq = existing === null || existing.rulesFaq.length === 0;
+    const needsStrategies = existing === null || existing.winningStrategies.length === 0;
+    if (existing && !needsFaq && !needsStrategies) {
       return profilePayload(existing);
     }
 
@@ -422,23 +513,40 @@ export const ensureBggGameProfile = onCall(
       throw new HttpsError('not-found', 'BoardGameGeek did not return this game.');
     }
 
-    let titles: string[] = [];
+    let rulesTitles: string[] = [];
+    let strategyTitles: string[] = [];
     try {
       const forumListXml = await fetchXml(`${BGG_BASE}/forumlist?id=${bggId}&type=thing`, token);
-      const forumId = parseRulesForumId(forumListXml);
-      if (forumId !== null) {
-        const forumXml = await fetchXml(`${BGG_BASE}/forum?id=${forumId}`, token);
-        titles = parseThreadTitles(forumXml);
+      const rulesForumId = needsFaq ? parseForumId(forumListXml, 'rules') : null;
+      const strategyForumId = needsStrategies ? parseForumId(forumListXml, 'strategy') : null;
+      if (rulesForumId !== null) {
+        rulesTitles = parseThreadTitles(await fetchXml(`${BGG_BASE}/forum?id=${rulesForumId}`, token));
+      }
+      if (strategyForumId !== null) {
+        strategyTitles = parseThreadTitles(
+          await fetchXml(`${BGG_BASE}/forum?id=${strategyForumId}`, token),
+        );
       }
     } catch (error) {
       console.warn('[ensureBggGameProfile] Forum lookup skipped:', error);
     }
 
-    const rulesFaq = await buildFaq(thing, titles, geminiApiKey.value());
+    const apiKey = geminiApiKey.value();
+    const rulesFaq =
+      needsFaq || existing === null ? await buildFaq(thing, rulesTitles, apiKey) : existing.rulesFaq;
+    let winningStrategies = existing?.winningStrategies ?? [];
+    if (needsStrategies) {
+      try {
+        winningStrategies = await buildStrategies(thing, strategyTitles, apiKey);
+      } catch (error) {
+        console.warn('[ensureBggGameProfile] Strategy notes skipped:', error);
+      }
+    }
     const profile: GameProfile = {
       ...thing,
       rulesFaq,
       gameplayQuestions: existing?.gameplayQuestions ?? [],
+      winningStrategies,
       updatedAt: Date.now(),
     };
     await ref.set(profilePayload(profile));
@@ -528,6 +636,7 @@ export const recordGameplayQuestion = onCall(
         mechanics: [],
         rulesFaq: [],
         gameplayQuestions,
+        winningStrategies: [],
         updatedAt,
       });
     }

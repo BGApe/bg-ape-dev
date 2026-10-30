@@ -24,6 +24,7 @@ export default function ChatScreen(): React.JSX.Element {
   const activeThreadId = useChatUiStore((s) => s.activeThreadId);
   const setActiveThreadId = useChatUiStore((s) => s.setActiveThreadId);
   const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
+  const setVersionSeed = useChatUiStore((s) => s.setVersionSeed);
   const [isCreating, setIsCreating] = useState(false);
 
   const activeThread: ChatThread | null = threads.find((t) => t.id === activeThreadId) ?? null;
@@ -73,6 +74,7 @@ export default function ChatScreen(): React.JSX.Element {
         isLoading={isLoading}
         onSelect={(t) => {
           setDiscussionFilter(null);
+          setVersionSeed(null);
           setActiveThreadId(t.id);
         }}
         onDelete={handleDelete}

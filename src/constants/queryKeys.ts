@@ -34,6 +34,7 @@ export const QueryKeys = {
   bgg: {
     all: ['bgg'] as const,
     search: (query: string) => ['bgg', 'search', query] as const,
+    popularity: (ids: string) => ['bgg', 'popularity', ids] as const,
     thing: (bggId: number) => ['bgg', 'thing', bggId] as const,
     profile: (key: number | string) => ['bgg', 'profile', key] as const,
   },

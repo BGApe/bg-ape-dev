@@ -13,6 +13,11 @@ const GameplayQuestionSchema = z.object({
   answer: z.string().min(1),
 });
 
+const WinningStrategySchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+});
+
 export const BggGameProfileSchema = z.object({
   bggId: z.number().int().positive(),
   name: z.string().min(1),
@@ -23,16 +28,19 @@ export const BggGameProfileSchema = z.object({
   averageWeight: z.number().optional(),
   bggRating: z.number().optional(),
   bggRank: z.number().int().optional(),
+  usersRated: z.number().int().optional(),
   thumbnailUrl: z.string().optional(),
   categories: z.array(z.string()).default([]),
   mechanics: z.array(z.string()).default([]),
   rulesFaq: z.array(RulesFaqItemSchema).default([]),
   gameplayQuestions: z.array(GameplayQuestionSchema).default([]),
+  winningStrategies: z.array(WinningStrategySchema).default([]),
   updatedAt: z.number(),
 });
 
 export type BggGameProfile = z.infer<typeof BggGameProfileSchema>;
 export type RulesFaqItem = z.infer<typeof RulesFaqItemSchema>;
+export type WinningStrategy = z.infer<typeof WinningStrategySchema>;
 
 export type EnsureBggGameProfileInput = {
   bggId?: number;

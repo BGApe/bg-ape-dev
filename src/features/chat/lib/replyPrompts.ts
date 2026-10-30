@@ -72,6 +72,77 @@ export function rulesHelperHandoff(topic: string): RulesHandoff {
   };
 }
 
+export function detailedSetupPrompt(game: string): HiddenPrompt {
+  return {
+    label: 'More help with setup',
+    text: `Give a more detailed setup for ${game} than a quick start. Cover the table layout, how to sort the components, what each player starts with, turn order, and exactly how the first turn begins. Stay on setup. Do not move into scoring or strategy. Return an empty suggestedGames array.`,
+  };
+}
+
+export function popularStrategiesPrompt(game: string): HiddenPrompt {
+  return {
+    label: 'Popular strategies',
+    text: `Describe the top 3 ways players win at ${game}, based on widely discussed BoardGameGeek strategy. For each strategy write a short title and 3 to 4 sentences on how it collects points or otherwise wins. Keep the three distinct. Do not recommend other games. Return an empty suggestedGames array.`,
+  };
+}
+
+export function strategyDetailPrompt(game: string): HiddenPrompt {
+  return {
+    label: 'More on these strategies',
+    text: `Go deeper on the winning strategies just described for ${game}. For each one, explain how it works in play, when to leave it, and a short example of a strong opening. Do not repeat the short summaries verbatim. Return an empty suggestedGames array.`,
+  };
+}
+
+export function setupDepthPrompt(
+  game: string,
+  depth: 'basic' | 'full',
+  players?: string,
+): HiddenPrompt {
+  const table = players !== undefined && players.length > 0 ? ` We are ${players} players.` : '';
+  if (depth === 'basic') {
+    return {
+      label: '15 minute setup',
+      text: `Quick setup guide for ${game}.${table} Walk me through the core rules so we understand the basics (15 minutes). Stay on setup, the first turns, and how a turn works. Return an empty suggestedGames array.`,
+    };
+  }
+  return {
+    label: 'Full rules walkthrough',
+    text: `Quick setup guide for ${game}.${table} Give me a complete rules walkthrough. Return an empty suggestedGames array.`,
+  };
+}
+
+export function differentStrategiesPrompt(game: string, existing: readonly string[]): HiddenPrompt {
+  const avoid =
+    existing.length > 0 ? ` Do not repeat these strategies: ${existing.join('; ')}.` : '';
+  return {
+    label: 'Different strategies',
+    text: `Describe 3 other ways players win at ${game}, based on widely discussed BoardGameGeek strategy.${avoid} For each strategy write a short title and 3 to 4 sentences. Keep the three distinct from each other. Return an empty suggestedGames array.`,
+  };
+}
+
+export function strategyFocusPrompt(game: string, title: string): HiddenPrompt {
+  return {
+    label: `More detail on ${title}`,
+    text: `For ${game}, explain the winning strategy "${title}" in more detail. Cover how it collects points or wins, how to play it from the opening through the end, and when it stops working. Use a short example. Do not stop at a one-line summary. Return an empty suggestedGames array.`,
+  };
+}
+
+export function coreMechanicsPrompt(game: string, players?: string): HiddenPrompt {
+  const table = players !== undefined && players.length > 0 ? ` We are ${players} players.` : '';
+  return {
+    label: 'Core mechanics',
+    text: `Rules question for ${game}.${table} Topic: Core mechanics. Explain the basics of a turn and how players interact, including how a round begins and ends. Keep it to the core loop. Return an empty suggestedGames array.`,
+  };
+}
+
+export function payAttentionPrompt(game: string, players?: string): HiddenPrompt {
+  const table = players !== undefined && players.length > 0 ? ` We are ${players} players.` : '';
+  return {
+    label: 'Pay attention to',
+    text: `Rules question for ${game}.${table} Topic: Pay attention to. Cover unusual rules that BoardGameGeek players keep discussing, and things that are commonly forgotten, such as tokens, counters, and numbers that have to be added at a specific time. Write a short paragraph for each point. When a point belongs to an expansion, name that expansion. Return an empty suggestedGames array.`,
+  };
+}
+
 export function topicFollowupPrompt(game: string, topic: string): HiddenPrompt {
   const question = RULES_TOPIC_QUESTIONS[topic] ?? `Explain ${topic}.`;
   return {
@@ -117,6 +188,28 @@ export function retargetGamePrompt(
     label,
     text: `${text} Answer for ${nextName}. Do not repeat my request.`,
   };
+}
+
+/** Tells the model to answer from the base game and the owned expansions. */
+export function rulesFamilyNote(
+  focus: { name: string; kind: string; bggId?: number; parentBggId?: number } | undefined,
+  games: readonly { name: string; kind: string; bggId?: number; parentBggId?: number }[],
+): string {
+  const parentBggId = focus?.kind === 'expansion' ? focus.parentBggId : focus?.bggId;
+  const base =
+    parentBggId !== undefined
+      ? games.find((game) => game.kind !== 'expansion' && game.bggId === parentBggId)
+      : focus?.kind !== 'expansion'
+        ? focus
+        : undefined;
+  const expansions =
+    parentBggId !== undefined
+      ? games.filter((game) => game.kind === 'expansion' && game.parentBggId === parentBggId)
+      : [];
+  const baseName = base?.name ?? focus?.name ?? 'the base game';
+  const expansionList =
+    expansions.length > 0 ? expansions.map((game) => game.name).join(', ') : 'its expansions';
+  return `Use the rules of ${baseName} together with ${expansionList}. When a card, score, or rule exists only in an expansion, name that expansion and say it is not in the base game.`;
 }
 
 export function playerCountFromMessages(messages: ChatMessage[]): string | undefined {

@@ -22,6 +22,7 @@ describe('parseThingXml fixtures', () => {
     expect(thing?.maxPlayers).toBe(4);
     expect(thing?.playingTime).toBe(30);
     expect(thing?.bggRank).toBe(146);
+    expect(thing?.usersRated).toBe(97269);
     expect(thing?.averageWeight).toBeCloseTo(2.3442, 3);
     expect(thing?.bggRating).toBeCloseTo(7.597, 2);
     expect(thing?.categories).toEqual(['Card Game', 'Medieval']);

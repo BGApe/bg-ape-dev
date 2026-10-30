@@ -25,6 +25,7 @@ import { useComposerStore } from '@/store/composerStore';
 import type { MessageId } from '@/types';
 
 import { chatRepository } from '../api/activeChatRepository';
+import { rulesFamilyNote } from '../lib/replyPrompts';
 import { previouslySuggestedGames } from '../lib/suggestedGames';
 import { runAssistantTurn } from '../services/assistantOrchestrator';
 import type { ChatMessage, ChatThread } from '../types';
@@ -37,6 +38,7 @@ export type OutboundMessage = {
   label?: string;
   segmentId?: string;
   segmentTitle?: string;
+  parentSegmentId?: string;
   discussionId?: string;
   discussionTitle?: string;
   discussionKind?: 'setup' | 'rules';
@@ -54,6 +56,7 @@ function discussionStamp(input: string | OutboundMessage): Partial<OutboundMessa
   if (input.discussionKind !== undefined) stamp.discussionKind = input.discussionKind;
   if (input.versionName !== undefined) stamp.versionName = input.versionName;
   if (input.playerCount !== undefined) stamp.playerCount = input.playerCount;
+  if (input.parentSegmentId !== undefined) stamp.parentSegmentId = input.parentSegmentId;
   return stamp;
 }
 
@@ -220,6 +223,7 @@ export function useSendMessage(thread: ChatThread | null) {
 
         let gameContext: CollectionGameContextItem | undefined;
         let setupDepth: SetupDepth | undefined;
+        let focusedGame: CollectionGame | undefined;
         if (reason === 'setup' || reason === 'rules') {
           const versionName = typeof input === 'string' ? undefined : input.versionName;
           const versionGame =
@@ -227,6 +231,7 @@ export function useSendMessage(thread: ChatThread | null) {
               ? games.find((game) => game.name.toLowerCase() === versionName.toLowerCase())
               : undefined;
           const game = versionGame ?? resolveGameFromThread(live, games);
+          focusedGame = game;
           if (game !== undefined) {
             const built = buildGameContext(game);
             if (built !== null) gameContext = built;
@@ -236,8 +241,11 @@ export function useSendMessage(thread: ChatThread | null) {
           }
         }
 
+        const modelText =
+          reason === 'rules' ? `${text}\n\n${rulesFamilyNote(focusedGame, games)}` : text;
+
         const assistantMessages = await runAssistantTurn(
-          text,
+          modelText,
           thread.id,
           uid,
           activeAssistantProvider,

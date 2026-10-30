@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -7,10 +8,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarChart } from '@/components/BarChart';
 import { MetaChip } from '@/components/MetaChip';
 import { Copy } from '@/constants/copy';
+import { QueryKeys } from '@/constants/queryKeys';
 import { Routes } from '@/constants/routes';
+import { useAuthSession } from '@/features/auth/hooks/useAuthSession';
+import { useCreateThread } from '@/features/chat/hooks/useCreateThread';
 import { useThreads } from '@/features/chat/hooks/useThreads';
 import { useUpdateThread } from '@/features/chat/hooks/useUpdateThread';
 import { findGameThread, resolveGameAnchor } from '@/features/chat/lib/gameThread';
+import type { ChatThread, NewChatThread } from '@/features/chat/types';
 import { AddGameSheet } from '@/features/collection/components/AddGameSheet';
 import { useAddGame } from '@/features/collection/hooks/useAddGame';
 import { useBggThing } from '@/features/collection/hooks/useBggThing';
@@ -78,10 +83,14 @@ export default function GameDetailScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: games = [] } = useCollection();
+  const { user } = useAuthSession();
+  const queryClient = useQueryClient();
   const { data: threads = [] } = useThreads();
   const updateThread = useUpdateThread();
+  const createThread = useCreateThread();
   const setActiveThreadId = useChatUiStore((s) => s.setActiveThreadId);
   const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
+  const setVersionSeed = useChatUiStore((s) => s.setVersionSeed);
   const { data: plays = [] } = usePlays();
   const self = useEnsureSelfPlayer();
   const updateGame = useUpdateGame();
@@ -144,6 +153,7 @@ export default function GameDetailScreen(): React.JSX.Element {
   const openGameChat = (kind: 'setup' | 'rules') => {
     const anchor = resolveGameAnchor({ gameId: game.id, gameName: game.name }, games);
     const existing = anchor !== null ? findGameThread(threads, anchor, games) : undefined;
+    if (kind === 'rules') setVersionSeed(game.name);
     setDiscussionFilter(kind);
     if (existing !== undefined) {
       if (anchor !== null && existing.gameKey !== anchor.key) {
@@ -159,6 +169,30 @@ export default function GameDetailScreen(): React.JSX.Element {
       }
       setActiveThreadId(existing.id);
       router.push(Routes.gameChat);
+      return;
+    }
+    if (kind === 'rules' && user !== null && anchor !== null) {
+      const input: NewChatThread = {
+        title: anchor.gameName,
+        reason: 'general',
+        gameKey: anchor.key,
+        gameName: anchor.gameName,
+      };
+      if (anchor.gameId !== undefined) input.gameId = anchor.gameId;
+      void createThread
+        .mutateAsync(input)
+        .then((created) => {
+          queryClient.setQueryData<ChatThread[]>(QueryKeys.chat.threads(user.uid), (prev) => {
+            const list = prev ?? [];
+            if (list.some((item) => item.id === created.id)) return list;
+            return [created, ...list];
+          });
+          setActiveThreadId(created.id);
+          router.push(Routes.gameChat);
+        })
+        .catch(() => {
+          Alert.alert(Copy.errors.generic);
+        });
       return;
     }
     router.push({
@@ -303,6 +337,7 @@ export default function GameDetailScreen(): React.JSX.Element {
           </Pressable>
           <Pressable
             onPress={() => openGameChat('rules')}
+            disabled={createThread.isPending}
             accessibilityRole="button"
             className="flex-1 items-center rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-3"
           >

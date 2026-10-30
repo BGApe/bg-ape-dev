@@ -18,6 +18,7 @@ export default function GameChatScreen(): React.JSX.Element {
   const activeThreadId = useChatUiStore((s) => s.activeThreadId);
   const setActiveThreadId = useChatUiStore((s) => s.setActiveThreadId);
   const setDiscussionFilter = useChatUiStore((s) => s.setDiscussionFilter);
+  const setVersionSeed = useChatUiStore((s) => s.setVersionSeed);
   const thread = threads.find((item) => item.id === activeThreadId) ?? null;
   const held = useRef<ChatThread | null>(null);
   if (thread !== null) held.current = thread;
@@ -27,8 +28,9 @@ export default function GameChatScreen(): React.JSX.Element {
     return navigation.addListener('beforeRemove', () => {
       setActiveThreadId(null);
       setDiscussionFilter(null);
+      setVersionSeed(null);
     });
-  }, [navigation, setActiveThreadId, setDiscussionFilter]);
+  }, [navigation, setActiveThreadId, setDiscussionFilter, setVersionSeed]);
 
   useEffect(() => {
     if (!isLoading && activeThreadId === null && held.current === null) router.back();

@@ -184,6 +184,7 @@ export const firestoreChatRepository: ChatRepository = {
       suggestedGames: message.suggestedGames,
       segmentId: message.segmentId,
       segmentTitle: message.segmentTitle,
+      parentSegmentId: message.parentSegmentId,
       discussionId: message.discussionId,
       discussionTitle: message.discussionTitle,
       discussionKind: message.discussionKind,
@@ -223,6 +224,9 @@ export const firestoreChatRepository: ChatRepository = {
     if (message.segmentTitle !== undefined && message.segmentTitle.length > 0) {
       stored.segmentTitle = message.segmentTitle;
     }
+    if (message.parentSegmentId !== undefined && message.parentSegmentId.length > 0) {
+      stored.parentSegmentId = message.parentSegmentId;
+    }
     copyDiscussionFields(stored, message);
     return stored;
   },
@@ -260,6 +264,9 @@ export const firestoreChatRepository: ChatRepository = {
       }
       if (parsed.data.segmentTitle !== undefined && parsed.data.segmentTitle.trim().length > 0) {
         stored.segmentTitle = parsed.data.segmentTitle.trim();
+      }
+      if (parsed.data.parentSegmentId !== undefined && parsed.data.parentSegmentId.length > 0) {
+        stored.parentSegmentId = parsed.data.parentSegmentId;
       }
       copyDiscussionFields(stored, parsed.data);
       messages.push(stored);

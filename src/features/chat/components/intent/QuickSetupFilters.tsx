@@ -6,6 +6,8 @@ import { Copy } from '@/constants/copy';
 import type { CollectionGame } from '@/features/collection/types';
 import type { GameId } from '@/types';
 
+import { playerCountChips } from '../../lib/playerCountChips';
+
 import { BggGameInput } from './BggGameInput';
 import { CollectionPicker } from './CollectionPicker';
 
@@ -59,6 +61,15 @@ function buildPrompt(state: State, games: CollectionGame[]): string {
   if (state.playerCount.trim()) parts.push(P.players(state.playerCount.trim()));
   if (state.depth) parts.push(P.depth[state.depth] ?? '');
   return parts.join(' ');
+}
+
+function selectedCollectionGame(state: State, games: CollectionGame[]): CollectionGame | undefined {
+  if (state.fromCollection && state.selectedGameId) {
+    return games.find((game) => game.id === state.selectedGameId);
+  }
+  const name = state.gameName.trim().toLowerCase();
+  if (name.length === 0) return undefined;
+  return games.find((game) => game.name.toLowerCase() === name);
 }
 
 function selectionFromState(state: State, games: CollectionGame[]): IntentGameSelection {
@@ -149,16 +160,35 @@ export function QuickSetupFilters({
     onContextChangeRef.current?.(selectionFromState(state, baseGames));
   }, [baseGames, initialGameId, initialGameName, initialPlayerCount, state]);
 
+  const selectedGame = useMemo(() => selectedCollectionGame(state, games), [games, state]);
+  const playerChips = useMemo(
+    () => playerCountChips(selectedGame?.minPlayers, selectedGame?.maxPlayers),
+    [selectedGame?.maxPlayers, selectedGame?.minPlayers],
+  );
+
   // Prefill from a same-session recommendation unless the user already chose a count.
   useEffect(() => {
     if (!sessionPlayerCount || state.playerCountTouched) return;
+    if (!playerChips.includes(sessionPlayerCount)) return;
     if (state.playerCount === sessionPlayerCount) return;
     const next = { ...state, playerCount: sessionPlayerCount };
     setState(next);
     onPromptChange(buildPrompt(next, baseGames));
     onContextChange?.(selectionFromState(next, baseGames));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to session reuse signal
-  }, [sessionPlayerCount]);
+  }, [playerChips, sessionPlayerCount]);
+
+  useEffect(() => {
+    setState((current) => {
+      if (current.playerCount.length === 0 || playerChips.includes(current.playerCount)) {
+        return current;
+      }
+      const next = { ...current, playerCount: '', playerCountTouched: true };
+      onPromptChangeRef.current(buildPrompt(next, baseGames));
+      onContextChangeRef.current?.(selectionFromState(next, baseGames));
+      return next;
+    });
+  }, [baseGames, playerChips]);
 
   function update(patch: Partial<State>) {
     const next = { ...state, ...patch };
@@ -167,7 +197,6 @@ export function QuickSetupFilters({
     onContextChange?.(selectionFromState(next, baseGames));
   }
 
-  const playerChips = ['1', '2', '3', '4', '5', '6', '6+'];
   const playerFromSession =
     Boolean(sessionPlayerCount) &&
     state.playerCount === sessionPlayerCount &&
