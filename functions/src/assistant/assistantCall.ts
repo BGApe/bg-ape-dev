@@ -301,6 +301,6 @@ function sanitizeAssistantPayload(parsed: unknown): unknown {
     .filter((name): name is string => typeof name === 'string')
     .map((name) => name.trim())
     .filter((name) => name.length > 0 && name.length <= 80)
-    .slice(0, 4);
+    .slice(0, 5);
   return { ...record, suggestedGames };
 }

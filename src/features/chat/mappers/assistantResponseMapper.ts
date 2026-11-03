@@ -22,7 +22,7 @@ export function formatAssistantContent(response: AssistantResponse): string {
   const bullets = response.bullets
     .map((bullet) => take(bullet))
     .filter((bullet): bullet is string => bullet !== null)
-    .map((bullet) => `• ${bullet}`);
+    .map((bullet) => (/^\s*##\s/m.test(bullet) ? bullet : `• ${bullet}`));
   const bulletBlock = bullets.join('\n');
   return [...prose, ...(bulletBlock.length > 0 ? [bulletBlock] : [])].join('\n\n');
 }

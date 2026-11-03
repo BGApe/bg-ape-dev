@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Copy } from '@/constants/copy';
 import { Routes } from '@/constants/routes';
+import { detectSetupDepth } from '@/features/assistant/lib/collectionContext';
+import type { SetupDepth } from '@/features/assistant/types';
 import { useBggGameProfile } from '@/features/collection/hooks/useBggGameProfile';
 import { useCollection } from '@/features/collection/hooks/useCollection';
 import { mapError } from '@/lib/mapError';
@@ -47,6 +49,11 @@ import {
 import { playerCountChips } from '../lib/playerCountChips';
 import { previewSentences, strategyTitles } from '../lib/previewText';
 import {
+  groupRecommendationRounds,
+  type RecommendationRound,
+  type RecommendationTip,
+} from '../lib/recommendationRounds';
+import {
   coreMechanicsPrompt,
   differentStrategiesPrompt,
   payAttentionPrompt,
@@ -55,6 +62,7 @@ import {
   setupDepthPrompt,
   strategyFocusPrompt,
 } from '../lib/replyPrompts';
+import { splitSetupSections } from '../lib/setupSections';
 import { REASON_EMOJI } from '../reasons';
 import type { ChatMessage, ChatThread, ChatThreadPatch, DiscussionKind } from '../types';
 
@@ -64,8 +72,12 @@ import { GameContextCard } from './GameContextCard';
 import { GameReplyBar, type GameReplyLayer } from './GameReplyBar';
 import { GameSwitchSheet } from './GameSwitchSheet';
 import { MessageBubble } from './MessageBubble';
+import { RecommendationActions } from './RecommendationActions';
+import { RecommendationRoundCard, type RecommendationBranch } from './RecommendationRoundCard';
 import { ReplyActions, type ReplyFollowup, type ReplyMenu } from './ReplyActions';
 import { RulesContextBar } from './RulesContextBar';
+import { SetupContextBar } from './SetupContextBar';
+import { SetupSectionList } from './SetupSectionList';
 import { SolvedSegmentCard } from './SolvedSegmentCard';
 import { TopicPreview } from './TopicPreview';
 
@@ -75,7 +87,27 @@ type Props = {
 };
 
 type ChatRow =
-  | { key: string; type: 'discussion'; id: string; title: string; expanded: boolean }
+  | {
+      key: string;
+      type: 'discussion';
+      id: string;
+      title: string;
+      expanded: boolean;
+      kind: DiscussionKind;
+      versionName: string;
+      playerCount?: string;
+      depth?: SetupDepth;
+    }
+  | {
+      key: string;
+      type: 'umbrella';
+      id: string;
+      title: string;
+      intro: string;
+      expanded: boolean;
+      tips: RecommendationTip[];
+      branches: RecommendationBranch[];
+    }
   | {
       key: string;
       type: 'segment';
@@ -85,6 +117,15 @@ type ChatRow =
       children: { id: string; title: string; messages: ChatMessage[] }[];
     }
   | { key: string; type: 'message'; message: ChatMessage };
+
+function tipNamesOf(round: RecommendationRound | undefined): string[] {
+  if (round === undefined) return [];
+  for (let index = round.topics.length - 1; index >= 0; index -= 1) {
+    const tips = round.topics[index]?.tips ?? [];
+    if (tips.length > 0) return tips.map((tip) => tip.name);
+  }
+  return round.tips.map((tip) => tip.name);
+}
 
 function discussionFields(discussion: DiscussionGroup): {
   discussionId?: string;
@@ -148,6 +189,9 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   const [faqOpen, setFaqOpen] = useState(false);
   const [strategyRepeatAsk, setStrategyRepeatAsk] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
+  const [chosenRoundId, setChosenRoundId] = useState<string | null>(null);
+  const [chosenTopicId, setChosenTopicId] = useState<string | null>('');
+  const [openTipId, setOpenTipId] = useState<string | null>(null);
   const [seenThreadId, setSeenThreadId] = useState(thread.id);
   if (seenThreadId !== thread.id) {
     setSeenThreadId(thread.id);
@@ -163,6 +207,9 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     setFaqOpen(false);
     setExpandedFaq(null);
     setStrategyRepeatAsk(false);
+    setChosenRoundId(null);
+    setChosenTopicId('');
+    setOpenTipId(null);
   }
 
   /** Auto-send any message queued by the intent screen, once per prompt. */
@@ -231,10 +278,37 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     thread.reason === 'setup' || thread.reason === 'rules'
       ? groupTopicRuns(messages, topicKind)
       : groupSolvedSegments(messages, thread.solvedSegmentIds ?? []);
-  const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
-  const suggestionMessage = [...messages]
+  const recommendationRounds =
+    !unified && thread.reason === 'recommendation' ? groupRecommendationRounds(messages) : [];
+  const latestRoundId = recommendationRounds[recommendationRounds.length - 1]?.id ?? null;
+  const openRoundId = chosenRoundId === '' ? null : (chosenRoundId ?? latestRoundId);
+  const openRound = recommendationRounds.find((round) => round.id === openRoundId);
+  const latestTopicId = openRound?.topics[openRound.topics.length - 1]?.id ?? null;
+  const expandedTopicId = chosenTopicId === '' ? null : (chosenTopicId ?? latestTopicId);
+  const latestRecommendationRound = [...recommendationRounds]
     .reverse()
-    .find((message) => message.role === 'assistant' && (message.suggestedGames?.length ?? 0) > 0);
+    .find((round) => round.tips.length > 0 || round.topics.some((topic) => topic.tips.length > 0));
+  const browseGames = tipNamesOf(openRound ?? latestRecommendationRound);
+  const recommendationRows: ChatRow[] = recommendationRounds.map((round) => {
+    const expanded = round.id === openRoundId;
+    return {
+      key: `round-${round.id}`,
+      type: 'umbrella',
+      id: round.id,
+      title: round.query,
+      intro: round.intro,
+      expanded,
+      tips: round.tips,
+      branches: round.topics.map((topic) => ({
+        id: topic.id,
+        title: topic.title,
+        intro: topic.intro,
+        expanded: expanded && topic.id === expandedTopicId,
+        tips: topic.tips,
+      })),
+    };
+  });
+  const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
   const solvedIds = thread.solvedSegmentIds ?? [];
   const followup: ReplyFollowup | null =
     latestAssistant?.segmentId !== undefined &&
@@ -324,6 +398,23 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
       : focusedTitle !== undefined
         ? 'guide'
         : 'root';
+
+  function sendRecommendation(
+    text: string,
+    label: string,
+    segment?: { id: string; title: string },
+  ) {
+    if (segment === undefined) {
+      setChosenRoundId(null);
+      setChosenTopicId(null);
+      setOpenTipId(null);
+    }
+    sendMessage.mutate({
+      text,
+      label,
+      ...(segment !== undefined ? { segmentId: segment.id, segmentTitle: segment.title } : {}),
+    });
+  }
 
   function reveal(discussionId: string, segmentId: string) {
     const key = `${discussionId}-${segmentId}`;
@@ -432,6 +523,11 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
         });
         return;
       }
+    }
+    if (!unified && thread.reason === 'recommendation') {
+      setChosenRoundId(null);
+      setChosenTopicId(null);
+      setOpenTipId(null);
     }
     sendMessage.mutate(trimmed);
   }
@@ -715,12 +811,21 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
   if (unified) {
     for (const discussion of visibleDiscussions) {
       const expanded = discussion.id === openDiscussionId;
+      const firstAsk = discussion.messages.find((message) => message.role === 'user');
+      const depth =
+        discussion.kind === 'setup' && firstAsk !== undefined
+          ? detectSetupDepth(firstAsk.content)
+          : undefined;
       gameRows.push({
         key: `discussion-${discussion.id}`,
         type: 'discussion',
         id: discussion.id,
         title: discussion.title,
         expanded,
+        kind: discussion.kind,
+        versionName: discussion.versionName,
+        ...(discussion.playerCount !== undefined ? { playerCount: discussion.playerCount } : {}),
+        ...(depth !== undefined ? { depth } : {}),
       });
       if (!expanded) continue;
       const pieces = attachStrategyChildren(
@@ -775,13 +880,7 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
     !unified && latestAssistant !== undefined && !sendMessage.isPending ? (
       <ReplyActions
         thread={thread}
-        message={
-          thread.reason === 'recommendation' && suggestionMessage !== undefined
-            ? suggestionMessage
-            : latestAssistant
-        }
         resetKey={latestAssistant.id}
-        messages={messages}
         games={collectionGames}
         disabled={isSending}
         menu={menu}
@@ -928,43 +1027,94 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
             data={
               unified
                 ? gameRows
-                : blocks.map(
-                    (block): ChatRow =>
-                      block.kind === 'segment'
-                        ? {
-                            key: `segment-${block.id}`,
-                            type: 'segment',
-                            id: block.id,
-                            title: block.title,
-                            messages: block.messages,
-                            children: [],
-                          }
-                        : { key: block.message.id, type: 'message', message: block.message },
-                  )
+                : thread.reason === 'recommendation'
+                  ? recommendationRows
+                  : blocks.map(
+                      (block): ChatRow =>
+                        block.kind === 'segment'
+                          ? {
+                              key: `segment-${block.id}`,
+                              type: 'segment',
+                              id: block.id,
+                              title: block.title,
+                              messages: block.messages,
+                              children: [],
+                            }
+                          : { key: block.message.id, type: 'message', message: block.message },
+                    )
             }
             keyExtractor={(item) => item.key}
-            extraData={`${expandedSegmentIds.join('|')}:${focusedSegmentKey ?? ''}:${menu}:${followup?.segmentId ?? ''}:${sendMessage.isPending}:${openDiscussionId ?? ''}:${replyLayer}:${faqOpen}:${strategyRepeatAsk}:${rulesVersionName}:${rulesPlayerCount ?? ''}`}
+            extraData={`${expandedSegmentIds.join('|')}:${focusedSegmentKey ?? ''}:${menu}:${followup?.segmentId ?? ''}:${sendMessage.isPending}:${openDiscussionId ?? ''}:${openRoundId ?? ''}:${expandedTopicId ?? ''}:${openTipId ?? ''}:${replyLayer}:${faqOpen}:${strategyRepeatAsk}:${rulesVersionName}:${rulesPlayerCount ?? ''}`}
             renderItem={({ item }) => {
+              if (item.type === 'umbrella') {
+                return (
+                  <RecommendationRoundCard
+                    title={item.title}
+                    intro={item.intro}
+                    expanded={item.expanded}
+                    tips={item.tips}
+                    branches={item.branches}
+                    openTipId={openTipId}
+                    pending={sendMessage.isPending}
+                    messages={messages}
+                    games={collectionGames}
+                    disabled={isSending}
+                    latestGames={browseGames}
+                    onToggle={() => {
+                      if (item.expanded) {
+                        setChosenRoundId('');
+                        setOpenTipId((current) =>
+                          current !== null && current.startsWith(`${item.id}:`) ? null : current,
+                        );
+                        return;
+                      }
+                      setChosenRoundId(item.id);
+                      setOpenTipId(null);
+                    }}
+                    onToggleBranch={(id, expanded) => {
+                      setOpenTipId(null);
+                      setChosenTopicId(expanded ? '' : id);
+                    }}
+                    onToggleTip={(id) => {
+                      setChosenTopicId('');
+                      setOpenTipId((current) => (current === id ? null : id));
+                    }}
+                    onToggleBranchTip={(id) =>
+                      setOpenTipId((current) => (current === id ? null : id))
+                    }
+                    onSend={sendRecommendation}
+                  />
+                );
+              }
               if (item.type === 'discussion') {
+                const onPress = () => {
+                  if (item.expanded) {
+                    setChosenDiscussionId('');
+                    setExpandedSegmentIds([]);
+                    setFocusedSegmentKey(null);
+                    setStrategyRepeatAsk(false);
+                    return;
+                  }
+                  setChosenDiscussionId(item.id);
+                  setActiveDiscussionId(item.id);
+                  setExpandedSegmentIds([]);
+                  setFocusedSegmentKey(null);
+                };
                 return (
                   <View className="mx-4 my-1.5 overflow-hidden rounded-2xl">
-                    <CollapseBar
-                      title={item.title}
-                      expanded={item.expanded}
-                      onPress={() => {
-                        if (item.expanded) {
-                          setChosenDiscussionId('');
-                          setExpandedSegmentIds([]);
-                          setFocusedSegmentKey(null);
-                          setStrategyRepeatAsk(false);
-                          return;
-                        }
-                        setChosenDiscussionId(item.id);
-                        setActiveDiscussionId(item.id);
-                        setExpandedSegmentIds([]);
-                        setFocusedSegmentKey(null);
-                      }}
-                    />
+                    {item.kind === 'setup' ? (
+                      <SetupContextBar
+                        gameName={item.versionName}
+                        expanded={item.expanded}
+                        onPress={onPress}
+                        {...(item.playerCount !== undefined
+                          ? { playerCount: item.playerCount }
+                          : {})}
+                        {...(item.depth !== undefined ? { depth: item.depth } : {})}
+                      />
+                    ) : (
+                      <CollapseBar title={item.title} expanded={item.expanded} onPress={onPress} />
+                    )}
                   </View>
                 );
               }
@@ -979,6 +1129,18 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
                     const assistants = cardMessages.filter(
                       (message) => message.role === 'assistant',
                     );
+                    const sections = splitSetupSections(
+                      assistants.map((message) => message.content).join('\n\n'),
+                    );
+                    if (sections !== null) {
+                      return (
+                        <SetupSectionList
+                          key={id}
+                          intro={sections.intro}
+                          sections={sections.sections}
+                        />
+                      );
+                    }
                     return (
                       <TopicPreview
                         key={id}
@@ -1164,6 +1326,19 @@ export function Conversation({ thread, onBack }: Props): React.JSX.Element {
                   />
                 )}
                 {replyActions}
+                {!unified &&
+                  thread.reason === 'recommendation' &&
+                  openTipId === null &&
+                  browseGames.length > 0 && (
+                    <RecommendationActions
+                      mode="browse"
+                      latestGames={browseGames}
+                      messages={messages}
+                      games={collectionGames}
+                      disabled={isSending}
+                      onSend={sendRecommendation}
+                    />
+                  )}
                 {newDiscussionButton}
               </>
             }

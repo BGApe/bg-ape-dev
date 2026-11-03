@@ -247,7 +247,7 @@ export const firestoreChatRepository: ChatRepository = {
       const suggestedGames = (parsed.data.suggestedGames ?? [])
         .map((name) => name.trim())
         .filter((name) => name.length > 0)
-        .slice(0, 4);
+        .slice(0, 5);
       const stored: ChatMessage = {
         id: parsed.data.id as MessageId,
         threadId: parsed.data.threadId as ThreadId,

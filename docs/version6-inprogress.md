@@ -4,13 +4,15 @@ Living plan doc for the v6 work stream. Focus: hardening the **LLM-based use cas
 (recommender, quick setup, and rules) and moving BGG metadata onto a
 **shared, cached, incrementally-refreshed** model.
 
-Last updated: 2026-10-30
+Last updated: 2026-11-03
 
 > Related history: `docs/version5-inprogress.md`, `docs/version5-handover.md`.
 > The recommender collection-context + conversation-history work is committed
 > (`feat(assistant): collection context, conversation history & BGG-aligned recommender`).
-> Part A below is committed in `d23cb44`. The 2026-10-30 picker, reply-button,
-> shared-profile, and unified game-chat work is in the working tree and not committed yet.
+> Part A below is committed in `d23cb44`. Chat layers and search ranking are on
+> `feat/chat-layers-search-rank` (`8092bcb`). The 2026-10-31 picker tips and the
+> 2026-11-03 picker layout, recommendation panels, and quick-setup depths are in
+> the working tree and not committed yet.
 
 ---
 
@@ -26,6 +28,72 @@ Also in that commit: tabs shell, Gemini 3.5 Flash, collection filters, and plays
 
 ### Done in the working tree (not committed)
 
+**2026-11-03.** Picker layout, recommendation panels, and quick-setup depths.
+Not committed.
+
+**Game picker form.** The generated question is hidden. Start still sends it.
+Story-driven is one on/off chip. Cooperative, competitive, euro, ameritrash,
+story-driven, area control, economic, cool minis, kids friendly, card game, and
+activity (charades, acting, movement) sit in one wrap near the top of the form.
+Card game maps to the BoardGameGeek Card Game category. Activity maps to party
+play and action / dexterity. A game with only one legal player count, such as
+Watergate at 2, is selected on its own so Start is not left disabled.
+
+**Recommendation panels.** An open pick is one panel. The filter bar stays the
+solid colour. The answer text sits on a light wash of that colour, with no
+frame of its own. Game tips have sharp corners, a thin border, and a slightly
+darker shade. More details stays inside the open tip. Similar games, More tips
+like this, and Easiest setup collapse the original tips to their titles and
+open a second panel in a different shade, with that set of tips inside it.
+
+**Quick setup bars and depths.** A collapsed quick-setup container shows the
+chosen parameters the way a picker bar shows filters: game name, player count,
+and depth (5 minutes, Core rules, or Full walkthrough). The question on the
+form stays short. The detailed instructions are added only on the model turn,
+so they work before a functions deploy. `functions/src/assistant/prompts.ts`
+has the same depth rules for the next deploy.
+
+- **5 minutes.** Bare minimum to start the first turn: essential mechanics and
+  the minimum table setup. Only pieces that are required every game. Optional
+  expansions and modules are left out, and the answer names what was left out
+  in one line.
+- **Core rules (15 minutes).** Where each component goes, and which figures,
+  characters, and resources each player takes. Then the core rules, the main
+  mechanics, and how scoring works. Rare exceptions and optional modules stay out.
+- **Full walkthrough.** The long form, split into sections the player opens one
+  at a time. The model starts each section with a `##` heading, a short
+  paragraph, and bullets. Coverage, when the game has it: what must be on the
+  table every game versus what is chosen for a different experience; components
+  and what they are used for; turn or phase flow, including attacks and
+  reactions; each major action in its own section with one example (action
+  cards and buys stay separate for a deck-builder); scoring; how different
+  sets, modules, or expansions change the pace. An older full answer stays one
+  block until that depth is asked again.
+
+**Game picker tips (2026-10-31, working tree).** Kids friendly sits with area control,
+economic, and cool minis, and opens an age range (under 6, 6–9, 10–12, 14+).
+A pick asks for five games. With “From my collection” off, one or two owned
+games may be named and the rest are outside the collection. The request is one
+umbrella. The player sees that request as a filter bar (players, time,
+complexity, and the other chosen tags as small icons). The full prompt still
+goes to the model. Each tip is a card under the bar. An open tip offers More
+details, How to play, Similar games, and Save for later. With nothing open:
+More tips like this, Different setup, and Easiest setup.
+
+Follow-ups stay on that same umbrella. More details stays inside the open tip.
+Similar games, More tips like this, and Easiest setup are the second shaded
+panel described under 2026-11-03, not a copy of the first card. Different setup
+starts a new picker. How to play still opens that game’s quick setup. A second
+full “Help me pick a board game” in the same thread gets its own bar.
+
+If the model returns no structured titles, bullets are read into tip cards, and
+a prose answer (including a clarifying question) still shows under the bar.
+
+Save for later writes My list (`users/{uid}/myList`), shown under Top games on
+Home (five rows, See all). The fifth title needs a functions deploy; until then
+the app also reads a fifth name out of the bullets if the server still caps
+`suggestedGames` at four.
+
 **Game picker filters.** The long category/mechanic chip list is replaced by six
 choices plus a search field for the rest of the BoardGameGeek tags.
 
@@ -33,19 +101,18 @@ choices plus a search field for the rest of the BoardGameGeek tags.
 - Euro / ameritrash — one or the other. Euro means economic systems, point salad,
   resources, low interaction, and luck mitigation. Ameritrash means minis, fighting,
   dice, and high luck.
-- Story-driven (yes / no), area control, economic, and cool minis can combine.
+- Story-driven, area control, economic, cool minis, kids friendly, card game, and
+  activity (charades, acting, movement) are single on/off chips in the same wrap as
+  cooperative, competitive, euro, and ameritrash. The generated prompt is hidden on
+  this screen; the Start button still sends it.
 
-**Reply buttons.** A recommendation stores up to four `suggestedGames`. Tapping one
-hides the other game buttons and shows quick rules overview, game setup, more about
-the game, and compare. Tap the selected name to bring the list back.
-
-- **I want more games** sends every title already suggested in the thread and drops
-  any repeat before the buttons are shown.
-- **Compare** asks for the same number of new peers as the latest suggestion set
-  (four suggestions → “Compare with 4 similar games”).
-- Game setup opens Quick setup with that game and the player count filled in, and
-  still asks for depth. Rules follow-ups open Rules helper. A stored FAQ question
-  opens a rules chat with the saved answer and does not call the model again.
+**Reply buttons.** Recommendation chats no longer use the old game-name chip row
+(overview, setup, more info, compare). Those actions live on the tip cards in
+the game-picker section above. A recommendation stores up to five
+`suggestedGames`. Setup and rules keep the topic buttons. Game setup from a tip
+opens Quick setup with that game and the player count filled in, and still asks
+for depth. Rules follow-ups open Rules helper. A stored FAQ question opens a
+rules chat with the saved answer and does not call the model again.
 
 **While a reply is generated.** The chat shows a thinking indicator, then the
 finished answer. The old letter-by-letter replay was local and was not an extra
@@ -310,6 +377,10 @@ change (it already emits `CollectionGameContextItem`).
 
 ## Backlog
 
+- **Play-by date on My list.** “I want to play it until” sets a date on a saved game and
+  creates a notification. Notes on My list are plain text for now.
+- **Where to play.** From a saved game, look for a table: friends’ collections (friends
+  are not in the app yet) and board-game cafés near the player (also not in the app yet).
 - **Dynamic game-picker filters.** Once play time and complexity are set, nudge the
   other filters to match (party games lean short, heavy euros lean long). Not in the
   current filter pass.

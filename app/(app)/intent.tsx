@@ -392,23 +392,27 @@ export default function IntentScreen(): React.JSX.Element {
         <View className="flex-1" />
       )}
 
-      {/* Prompt preview + Start button */}
+      {/* The game picker sends the built prompt without showing it. */}
       <View className="border-t border-[#2A2A2A] px-4 pt-3 pb-2">
-        <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
-          {C.promptPreviewLabel}
-        </Text>
-        <TextInput
-          className="mb-3 rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm text-[#F9F9F9]"
-          placeholder={C.promptPlaceholder}
-          placeholderTextColor="#525252"
-          value={activePrompt}
-          onChangeText={(v) => {
-            setPromptTouched(true);
-            setEditedPrompt(v);
-          }}
-          multiline
-          style={{ minHeight: 72, textAlignVertical: 'top' }}
-        />
+        {reason === 'recommendation' ? null : (
+          <>
+            <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
+              {C.promptPreviewLabel}
+            </Text>
+            <TextInput
+              className="mb-3 rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm text-[#F9F9F9]"
+              placeholder={C.promptPlaceholder}
+              placeholderTextColor="#525252"
+              value={activePrompt}
+              onChangeText={(v) => {
+                setPromptTouched(true);
+                setEditedPrompt(v);
+              }}
+              multiline
+              style={{ minHeight: 72, textAlignVertical: 'top' }}
+            />
+          </>
+        )}
 
         <TouchableOpacity
           onPress={handleStart}

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Copy } from '@/constants/copy';
@@ -8,9 +8,11 @@ import type { CollectionGame } from '@/features/collection/types';
 
 import { resolveGamePickerTags, searchGamePickerTags } from '../../lib/bggTagOptions';
 import {
+  pickerScopeSentences,
   tastePromptSentences,
   type ConflictStyle,
   type DesignStyle,
+  type KidsAge,
 } from '../../lib/gamePickerTaste';
 
 const C = Copy.intent.gamePicker;
@@ -32,6 +34,10 @@ type State = {
   areaControl: boolean;
   economic: boolean;
   coolMinis: boolean;
+  kidsFriendly: boolean;
+  kidsAge?: KidsAge;
+  cardGame: boolean;
+  activityGame: boolean;
   extraTags: string[];
   tableSize: TableSize | undefined;
   notes: string;
@@ -46,6 +52,9 @@ const INITIAL: State = {
   areaControl: false,
   economic: false,
   coolMinis: false,
+  kidsFriendly: false,
+  cardGame: false,
+  activityGame: false,
   extraTags: [],
   tableSize: undefined,
   notes: '',
@@ -71,11 +80,15 @@ function buildPrompt(state: State): string {
       areaControl: state.areaControl,
       economic: state.economic,
       coolMinis: state.coolMinis,
+      kidsFriendly: state.kidsFriendly,
+      ...(state.kidsAge !== undefined ? { kidsAge: state.kidsAge } : {}),
+      cardGame: state.cardGame,
+      activityGame: state.activityGame,
       extraTags: state.extraTags,
     }),
   );
+  parts.push(...pickerScopeSentences(state.fromCollection));
   if (state.tableSize) parts.push(P.tableSize(state.tableSize));
-  if (state.fromCollection) parts.push(P.fromCollection);
   if (state.activityBias !== 'none') {
     parts.push(P.activityBias[state.activityBias]);
   }
@@ -87,18 +100,20 @@ function Chip({
   label,
   selected,
   onPress,
+  dense = false,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  dense?: boolean;
 }): React.JSX.Element {
   return (
     <TouchableOpacity
       onPress={onPress}
       accessibilityRole="button"
-      className={`mr-2 mb-2 rounded-full border px-3 py-1.5 ${
-        selected ? 'border-[#818CF8] bg-[#818CF8]/20' : 'border-[#2A2A2A] bg-[#1A1A1A]'
-      }`}
+      className={`rounded-full border ${
+        dense ? 'mr-1.5 mb-1.5 px-2.5 py-1' : 'mr-2 mb-2 px-3 py-1.5'
+      } ${selected ? 'border-[#818CF8] bg-[#818CF8]/20' : 'border-[#2A2A2A] bg-[#1A1A1A]'}`}
     >
       <Text className={`text-sm ${selected ? 'text-[#818CF8]' : 'text-neutral-300'}`}>{label}</Text>
     </TouchableOpacity>
@@ -108,6 +123,11 @@ function Chip({
 export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.Element {
   const [state, setState] = useState<State>(INITIAL);
   const [tagQuery, setTagQuery] = useState('');
+  const onPromptChangeRef = useRef(onPromptChange);
+  onPromptChangeRef.current = onPromptChange;
+  useEffect(() => {
+    onPromptChangeRef.current(buildPrompt(INITIAL));
+  }, []);
   const tagOptions = useMemo(() => resolveGamePickerTags(games), [games]);
   const tagMatches = useMemo(
     () =>
@@ -115,7 +135,10 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
     [tagOptions, tagQuery, state.extraTags],
   );
 
-  function update(patch: Partial<State>, clear: ('conflict' | 'design' | 'storyDriven')[] = []) {
+  function update(
+    patch: Partial<State>,
+    clear: ('conflict' | 'design' | 'storyDriven' | 'kidsAge')[] = [],
+  ) {
     const next: State = { ...state, ...patch };
     for (const key of clear) delete next[key];
     setState(next);
@@ -150,6 +173,99 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
           thumbColor="#F9F9F9"
         />
       </View>
+
+      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{C.tasteLabel}</Text>
+      <View className="mb-3 flex-row flex-wrap">
+        {C.conflictOptions.map((opt) => (
+          <Chip
+            key={opt.id}
+            dense
+            label={opt.label}
+            selected={state.conflict === opt.id}
+            onPress={() =>
+              state.conflict === opt.id ? update({}, ['conflict']) : update({ conflict: opt.id })
+            }
+          />
+        ))}
+        {C.designOptions.map((opt) => (
+          <Chip
+            key={opt.id}
+            dense
+            label={opt.label}
+            selected={state.design === opt.id}
+            onPress={() =>
+              state.design === opt.id ? update({}, ['design']) : update({ design: opt.id })
+            }
+          />
+        ))}
+        <Chip
+          dense
+          label={C.storyLabel}
+          selected={state.storyDriven === true}
+          onPress={() =>
+            state.storyDriven === true ? update({}, ['storyDriven']) : update({ storyDriven: true })
+          }
+        />
+        <Chip
+          dense
+          label={C.areaControl}
+          selected={state.areaControl}
+          onPress={() => update({ areaControl: !state.areaControl })}
+        />
+        <Chip
+          dense
+          label={C.economic}
+          selected={state.economic}
+          onPress={() => update({ economic: !state.economic })}
+        />
+        <Chip
+          dense
+          label={C.coolMinis}
+          selected={state.coolMinis}
+          onPress={() => update({ coolMinis: !state.coolMinis })}
+        />
+        <Chip
+          dense
+          label={C.kidsFriendly}
+          selected={state.kidsFriendly}
+          onPress={() =>
+            state.kidsFriendly
+              ? update({ kidsFriendly: false }, ['kidsAge'])
+              : update({ kidsFriendly: true })
+          }
+        />
+        <Chip
+          dense
+          label={C.cardGame}
+          selected={state.cardGame}
+          onPress={() => update({ cardGame: !state.cardGame })}
+        />
+        <Chip
+          dense
+          label={C.activityGame}
+          selected={state.activityGame}
+          onPress={() => update({ activityGame: !state.activityGame })}
+        />
+      </View>
+      {state.kidsFriendly && (
+        <>
+          <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
+            {C.kidsAgeLabel}
+          </Text>
+          <View className="mb-4 flex-row flex-wrap">
+            {C.kidsAgeOptions.map((opt) => (
+              <Chip
+                key={opt.id}
+                label={opt.label}
+                selected={state.kidsAge === opt.id}
+                onPress={() =>
+                  state.kidsAge === opt.id ? update({}, ['kidsAge']) : update({ kidsAge: opt.id })
+                }
+              />
+            ))}
+          </View>
+        </>
+      )}
 
       <Text className="mb-1 text-xs uppercase tracking-wide text-neutral-500">
         {C.activityBiasLabel}
@@ -208,68 +324,6 @@ export function GamePickerFilters({ games, onPromptChange }: Props): React.JSX.E
             onPress={() => update({ playTime: state.playTime === opt ? undefined : opt })}
           />
         ))}
-      </View>
-
-      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{C.tasteLabel}</Text>
-      <View className="mb-2 flex-row flex-wrap">
-        {C.conflictOptions.map((opt) => (
-          <Chip
-            key={opt.id}
-            label={opt.label}
-            selected={state.conflict === opt.id}
-            onPress={() =>
-              state.conflict === opt.id ? update({}, ['conflict']) : update({ conflict: opt.id })
-            }
-          />
-        ))}
-      </View>
-      <View className="mb-2 flex-row flex-wrap">
-        {C.designOptions.map((opt) => (
-          <Chip
-            key={opt.id}
-            label={opt.label}
-            selected={state.design === opt.id}
-            onPress={() =>
-              state.design === opt.id ? update({}, ['design']) : update({ design: opt.id })
-            }
-          />
-        ))}
-      </View>
-      <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{C.storyLabel}</Text>
-      <View className="mb-2 flex-row flex-wrap">
-        <Chip
-          label={C.storyYes}
-          selected={state.storyDriven === true}
-          onPress={() =>
-            state.storyDriven === true ? update({}, ['storyDriven']) : update({ storyDriven: true })
-          }
-        />
-        <Chip
-          label={C.storyNo}
-          selected={state.storyDriven === false}
-          onPress={() =>
-            state.storyDriven === false
-              ? update({}, ['storyDriven'])
-              : update({ storyDriven: false })
-          }
-        />
-      </View>
-      <View className="mb-4 flex-row flex-wrap">
-        <Chip
-          label={C.areaControl}
-          selected={state.areaControl}
-          onPress={() => update({ areaControl: !state.areaControl })}
-        />
-        <Chip
-          label={C.economic}
-          selected={state.economic}
-          onPress={() => update({ economic: !state.economic })}
-        />
-        <Chip
-          label={C.coolMinis}
-          selected={state.coolMinis}
-          onPress={() => update({ coolMinis: !state.coolMinis })}
-        />
       </View>
 
       <Text className="mb-2 text-xs uppercase tracking-wide text-neutral-500">

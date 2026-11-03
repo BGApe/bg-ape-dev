@@ -179,16 +179,24 @@ export function QuickSetupFilters({
   }, [playerChips, sessionPlayerCount]);
 
   useEffect(() => {
-    setState((current) => {
-      if (current.playerCount.length === 0 || playerChips.includes(current.playerCount)) {
-        return current;
-      }
-      const next = { ...current, playerCount: '', playerCountTouched: true };
+    const chosen = state.playerCount;
+    const valid = chosen.length > 0 && playerChips.includes(chosen);
+    if (valid) return;
+    const only = playerChips.length === 1 ? playerChips[0] : undefined;
+    // A game such as Watergate has one legal count. Select it so Start is not left dead.
+    if (only !== undefined && !(state.playerCountTouched && chosen.length === 0)) {
+      const next = { ...state, playerCount: only };
+      setState(next);
       onPromptChangeRef.current(buildPrompt(next, baseGames));
       onContextChangeRef.current?.(selectionFromState(next, baseGames));
-      return next;
-    });
-  }, [baseGames, playerChips]);
+      return;
+    }
+    if (chosen.length === 0) return;
+    const next = { ...state, playerCount: '', playerCountTouched: true };
+    setState(next);
+    onPromptChangeRef.current(buildPrompt(next, baseGames));
+    onContextChangeRef.current?.(selectionFromState(next, baseGames));
+  }, [baseGames, playerChips, state]);
 
   function update(patch: Partial<State>) {
     const next = { ...state, ...patch };

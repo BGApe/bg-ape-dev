@@ -2,16 +2,16 @@ import type { AssistantResponse } from '@/features/assistant/types';
 
 import type { ChatMessage } from '../types';
 
-const MAX_SUGGESTIONS = 4;
+const MAX_SUGGESTIONS = 5;
 
 /**
  * Titles for recommendation reply buttons.
  * Prefers the structured field. Falls back to "Name — reason" bullets.
  */
 export function extractSuggestedGames(response: AssistantResponse): string[] {
-  const fromField = cleanTitles(response.suggestedGames ?? []);
-  if (fromField.length > 0) return fromField;
-  if (response.type !== 'recommendation') return [];
+  const fromField = uniqueNames(response.suggestedGames ?? []);
+  if (response.type !== 'recommendation') return uniqueNames(fromField, MAX_SUGGESTIONS);
+  if (fromField.length >= MAX_SUGGESTIONS) return uniqueNames(fromField, MAX_SUGGESTIONS);
 
   const fromBullets: string[] = [];
   for (const bullet of response.bullets) {
@@ -21,7 +21,7 @@ export function extractSuggestedGames(response: AssistantResponse): string[] {
     }
     fromBullets.push(name);
   }
-  return cleanTitles(fromBullets);
+  return uniqueNames([...fromField, ...fromBullets], MAX_SUGGESTIONS);
 }
 
 /** Titles already offered in this thread, so a later pass can exclude them. */
@@ -76,8 +76,4 @@ function uniqueNames(names: string[], limit?: number): string[] {
     if (limit !== undefined && out.length >= limit) break;
   }
   return out;
-}
-
-function cleanTitles(names: string[]): string[] {
-  return uniqueNames(names, MAX_SUGGESTIONS);
 }

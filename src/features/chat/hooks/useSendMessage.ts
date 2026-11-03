@@ -25,7 +25,7 @@ import { useComposerStore } from '@/store/composerStore';
 import type { MessageId } from '@/types';
 
 import { chatRepository } from '../api/activeChatRepository';
-import { rulesFamilyNote } from '../lib/replyPrompts';
+import { rulesFamilyNote, setupDepthNote } from '../lib/replyPrompts';
 import { previouslySuggestedGames } from '../lib/suggestedGames';
 import { runAssistantTurn } from '../services/assistantOrchestrator';
 import type { ChatMessage, ChatThread } from '../types';
@@ -241,8 +241,13 @@ export function useSendMessage(thread: ChatThread | null) {
           }
         }
 
+        const depthOnThisTurn = reason === 'setup' ? detectSetupDepth(text) : undefined;
         const modelText =
-          reason === 'rules' ? `${text}\n\n${rulesFamilyNote(focusedGame, games)}` : text;
+          reason === 'rules'
+            ? `${text}\n\n${rulesFamilyNote(focusedGame, games)}`
+            : depthOnThisTurn !== undefined
+              ? `${text}\n\n${setupDepthNote(depthOnThisTurn)}`
+              : text;
 
         const assistantMessages = await runAssistantTurn(
           modelText,

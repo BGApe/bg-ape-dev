@@ -96,6 +96,8 @@ function hasFilterSignals(text: string): boolean {
     t.includes('ameritrash') ||
     t.includes('story-driven') ||
     t.includes('area control') ||
+    t.includes('card game') ||
+    t.includes('activity game') ||
     t.includes('miniatures') ||
     t.includes('deck, bag, and pool building')
   );

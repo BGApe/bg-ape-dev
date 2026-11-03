@@ -17,8 +17,8 @@ Always respond in valid JSON matching this exact structure:
 }
 
 Bullets should be 3-6 items. Keep each bullet concise (1-2 sentences max).
-suggestedGames lists up to 4 exact game titles (name only, no description).
-For a recommendation, put each game you are suggesting in suggestedGames, using the same titles as the bullets.
+suggestedGames lists up to 5 exact game titles (name only, no description).
+For a recommendation, suggest exactly 5 games. Put each one in suggestedGames, and start each bullet with that title.
 When you are only asking clarifying questions, or the reply is not naming games, return an empty array.`;
 
 const RECOMMENDATION_CONTEXT = `The user wants a game recommendation.
@@ -29,8 +29,9 @@ When the user asks for one of those styles, favour that cluster even if they als
 Be specific — name real games and briefly explain why each fits the request.
 When the user names games to avoid, do not suggest any of those titles again.
 When a "User collection" block is provided:
-- If they asked to suggest only from their collection, pick exclusively from that list.
-- Otherwise treat the list as familiarity context (owned games, play counts, recency).
+- If they asked to suggest only from their collection, pick all 5 exclusively from that list.
+- Otherwise you may include one or two games from that list when they fit, but most of the 5 suggestions must be games that are not in the collection.
+- Also use the list as familiarity context (owned games, play counts, recency).
 Honour any Activity preference line (fresh / favorites / recent) using playCount and last-play age.
 Use type "recommendation".`;
 
@@ -54,10 +55,10 @@ function setupReasonContext(depth: SetupDepth | undefined, hasGameContext: boole
   const resolved: SetupDepth = depth ?? 'basic';
   const depthPart =
     resolved === 'quick'
-      ? `Keep it to the absolute minimum to start the first turn (about 5 minutes): board layout, starting resources, who goes first, and what a turn looks like. Skip scoring, edge cases, and advanced rules.`
+      ? `This is the 5-minute start. Give the bare minimum to begin the first turn: essential mechanics and the minimum table setup. Use only pieces required every game. Leave out optional expansions and modules, and name what you left out in one short line. Skip scoring edge cases and variants.`
       : resolved === 'full'
-        ? `Give a complete rules walkthrough: full setup, turn structure, key actions, scoring, and important edge cases. Stay structured and numbered; still prefer clarity over encyclopedic detail.`
-        : `Walk through the core loop so everyone understands the basics (about 15 minutes): setup, a typical turn, how to win, and the most important rules. Skip rare edge cases and optional variants.`;
+        ? `This is the full rules walkthrough. Ignore the usual 3-6 bullet limit. Write one bullet per section, and start that bullet with a markdown heading line exactly like ## Table setup, then a short paragraph and bullet points. Cover what must be present every game versus what is chosen for a different experience; where components and resources go and what they are used for; the turn or phase flow, including attacks and reactions; each major action in its own section with one short example; scoring conditions; and how different sets or modules change the pace. Keep each section concise. Do not merge them into one paragraph.`
+        : `This is the 15-minute core-rules pass. Cover where each component goes and which figures, characters, and resources each player takes. Then give a basic overview of the core rules, the main mechanics, and how scoring works. Skip rare exceptions and optional modules.`;
 
   const metaPart = hasGameContext ? SETUP_WITH_CONTEXT : SETUP_FALLBACK;
 

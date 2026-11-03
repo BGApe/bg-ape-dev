@@ -14,6 +14,7 @@ export const Routes = {
   intent: '/(app)/intent',
   account: '/(app)/account',
   player: '/(app)/player',
+  myList: '/(app)/my-list',
 } as const;
 
 export type Route = (typeof Routes)[keyof typeof Routes];

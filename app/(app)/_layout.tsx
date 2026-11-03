@@ -27,6 +27,7 @@ export default function AppLayout(): React.JSX.Element | null {
       <Stack.Screen name="stats" options={{ headerShown: false }} />
       <Stack.Screen name="intent" options={{ headerShown: false }} />
       <Stack.Screen name="player" options={{ headerShown: false }} />
+      <Stack.Screen name="my-list" options={{ headerShown: false }} />
     </Stack>
   );
 }

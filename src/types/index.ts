@@ -23,3 +23,5 @@ export type PlayId = Brand<string, 'PlayId'>;
 export type PlayerId = Brand<string, 'PlayerId'>;
 /** Identifies a reusable location profile (users/{uid}/locations/{locationId}). */
 export type LocationId = Brand<string, 'LocationId'>;
+/** Identifies a saved game on My list (users/{uid}/myList/{itemId}). */
+export type MyListItemId = Brand<string, 'MyListItemId'>;

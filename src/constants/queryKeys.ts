@@ -31,6 +31,10 @@ export const QueryKeys = {
     all: ['locations'] as const,
     list: (uid: string) => ['locations', 'list', uid] as const,
   },
+  myList: {
+    all: ['myList'] as const,
+    list: (uid: string) => ['myList', 'list', uid] as const,
+  },
   bgg: {
     all: ['bgg'] as const,
     search: (query: string) => ['bgg', 'search', query] as const,

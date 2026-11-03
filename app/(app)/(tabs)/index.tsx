@@ -7,9 +7,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarChart } from '@/components/BarChart';
 import type { BarDatum } from '@/components/BarChart';
 import { Copy } from '@/constants/copy';
+import { Routes } from '@/constants/routes';
 import { REASON_EMOJI } from '@/features/chat/reasons';
 import type { ChatReason } from '@/features/chat/types';
 import { useCollection } from '@/features/collection/hooks/useCollection';
+import { useMyList } from '@/features/myList/hooks/useMyList';
 import { usePlays } from '@/features/plays/hooks/usePlays';
 import type { Play } from '@/features/plays/types';
 
@@ -36,6 +38,8 @@ export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const { data: games = [] } = useCollection();
   const { data: plays = [] } = usePlays();
+  const { data: myList = [] } = useMyList();
+  const myListPreview = myList.slice(0, 5);
 
   const weekChart = useMemo(() => buildWeekChart(plays), [plays]);
   const hasActivity = weekChart.some((d) => d.value > 0);
@@ -157,6 +161,39 @@ export default function HomeScreen(): React.JSX.Element {
               </TouchableOpacity>
             );
           })}
+        </View>
+      )}
+
+      <View className="mb-2 mt-6 flex-row items-center justify-between">
+        <Text className="text-base font-semibold text-[#F9F9F9]">{Copy.home.myListTitle}</Text>
+        <TouchableOpacity onPress={() => router.push(Routes.myList)} accessibilityRole="button">
+          <Text className="text-xs text-[#818CF8]">{Copy.home.seeAll}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {myListPreview.length === 0 ? (
+        <View className="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-5">
+          <Text className="text-sm text-neutral-400">{Copy.home.myListEmpty}</Text>
+        </View>
+      ) : (
+        <View className="gap-2">
+          {myListPreview.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              onPress={() => router.push(Routes.myList)}
+              accessibilityRole="button"
+              className="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3"
+            >
+              <Text className="text-base text-[#F9F9F9]" numberOfLines={1}>
+                {item.name}
+              </Text>
+              {item.note !== undefined && item.note.length > 0 && (
+                <Text className="mt-0.5 text-xs text-neutral-500" numberOfLines={1}>
+                  {item.note}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
         </View>
       )}
     </ScrollView>

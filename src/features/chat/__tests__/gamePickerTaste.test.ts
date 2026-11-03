@@ -3,7 +3,7 @@ import type { ChatMessage } from '@/features/chat/types';
 import type { MessageId, ThreadId } from '@/types';
 
 import { searchGamePickerTags } from '../lib/bggTagOptions';
-import { tastePromptSentences } from '../lib/gamePickerTaste';
+import { pickerScopeSentences, tastePromptSentences } from '../lib/gamePickerTaste';
 import { comparePrompt, moreGamesPrompt, rulesHelperHandoff } from '../lib/replyPrompts';
 import {
   extractSuggestedGames,
@@ -20,6 +20,10 @@ describe('tastePromptSentences', () => {
       areaControl: true,
       economic: true,
       coolMinis: false,
+      kidsFriendly: true,
+      kidsAge: '6-9',
+      cardGame: true,
+      activityGame: true,
       extraTags: ['Worker Placement'],
     });
     const text = sentences.join(' ');
@@ -33,6 +37,22 @@ describe('tastePromptSentences', () => {
     expect(text).toContain('Area Majority / Influence');
     expect(text).toContain('category: Economic');
     expect(text).toContain('Worker Placement');
+    expect(text).toContain('kids-friendly');
+    expect(text).toContain('aged 6 to 9');
+    expect(text).toContain('category: Card Game');
+    expect(text).toContain('activity game:');
+    expect(text).toContain('charades');
+  });
+
+  it('asks for five tips, mostly outside the collection unless that filter is on', () => {
+    const open = pickerScopeSentences(false).join(' ');
+    expect(open).toContain('exactly 5');
+    expect(open).toContain('one or two games from my collection');
+    expect(open).toContain('do not own');
+
+    const owned = pickerScopeSentences(true).join(' ');
+    expect(owned).toContain('only from my collection');
+    expect(owned).not.toContain('do not own');
   });
 
   it('describes ameritrash as minis, fighting, and dice', () => {
@@ -42,6 +62,9 @@ describe('tastePromptSentences', () => {
       areaControl: false,
       economic: false,
       coolMinis: true,
+      kidsFriendly: false,
+      cardGame: false,
+      activityGame: false,
       extraTags: [],
     }).join(' ');
 
@@ -68,13 +91,29 @@ describe('extractSuggestedGames', () => {
     bullets: ['Wingspan — engine builder', 'Azul — tiles'],
   };
 
-  it('prefers the structured list and caps it at four', () => {
+  it('prefers the structured list and caps it at five', () => {
     expect(
       extractSuggestedGames({
         ...base,
-        suggestedGames: ['Brass', 'Brass', 'Concordia', 'Hansa', 'Tigris', 'Extra'],
+        suggestedGames: ['Brass', 'Brass', 'Concordia', 'Hansa', 'Tigris', 'Azul', 'Extra'],
       }),
-    ).toEqual(['Brass', 'Concordia', 'Hansa', 'Tigris']);
+    ).toEqual(['Brass', 'Concordia', 'Hansa', 'Tigris', 'Azul']);
+  });
+
+  it('keeps a fifth title from the bullets when the structured list was shorter', () => {
+    expect(
+      extractSuggestedGames({
+        ...base,
+        bullets: [
+          'Brass — economic',
+          'Concordia — trade',
+          'Hansa — routes',
+          'Tigris — tiles',
+          'Azul — pattern',
+        ],
+        suggestedGames: ['Brass', 'Concordia', 'Hansa', 'Tigris'],
+      }),
+    ).toEqual(['Brass', 'Concordia', 'Hansa', 'Tigris', 'Azul']);
   });
 
   it('falls back to names before a dash on recommendations', () => {

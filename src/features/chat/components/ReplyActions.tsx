@@ -1,29 +1,21 @@
-import { useRouter } from 'expo-router';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 
 import { Copy } from '@/constants/copy';
-import { Routes } from '@/constants/routes';
 import { useBggGameProfile } from '@/features/collection/hooks/useBggGameProfile';
 import type { CollectionGame } from '@/features/collection/types';
 import type { RulesFaqItem, WinningStrategy } from '@/services/bgg/gameProfile';
 
 import { newSegmentId } from '../lib/messageGroups';
 import {
-  comparePrompt,
   detailedSetupPrompt,
   elaboratePrompt,
-  moreGamesPrompt,
-  moreInfoPrompt,
-  playerCountFromMessages,
   popularStrategiesPrompt,
-  quickOverviewPrompt,
   strategyDetailPrompt,
   topicFollowupPrompt,
 } from '../lib/replyPrompts';
-import { previouslySuggestedGames } from '../lib/suggestedGames';
-import type { ChatMessage, ChatThread } from '../types';
+import type { ChatThread } from '../types';
 
 const C = Copy.chat.reply;
 const Faq = Copy.intent.rulesHelper;
@@ -42,9 +34,7 @@ type SegmentRef = {
 
 type Props = {
   thread: ChatThread;
-  message: ChatMessage;
   resetKey: string;
-  messages: ChatMessage[];
   games: CollectionGame[];
   disabled: boolean;
   menu: ReplyMenu;
@@ -91,9 +81,7 @@ function findNamedGame(games: CollectionGame[], name: string): CollectionGame | 
 
 export function ReplyActions({
   thread,
-  message,
   resetKey,
-  messages,
   games,
   disabled,
   menu,
@@ -106,8 +94,6 @@ export function ReplyActions({
   onInsertFaq,
   onInsertStrategies,
 }: Props): React.JSX.Element | null {
-  const router = useRouter();
-  const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [faqOpen, setFaqOpen] = useState(false);
   const gameName = thread.gameName;
   const owned = gameName !== undefined ? findOwnedGame(games, gameName) : undefined;
@@ -124,84 +110,8 @@ export function ReplyActions({
   );
 
   useEffect(() => {
-    setSelectedGame(null);
     setFaqOpen(false);
   }, [resetKey]);
-
-  if (thread.reason === 'recommendation') {
-    const gamesNamed = message.suggestedGames ?? [];
-    if (gamesNamed.length === 0) return null;
-    const more = moreGamesPrompt(previouslySuggestedGames(messages));
-    const selected = selectedGame;
-    return (
-      <View className="mx-4 mb-2 max-w-[90%]">
-        {selected === null ? (
-          <View className="flex-row flex-wrap">
-            {gamesNamed.map((game) => (
-              <ActionButton
-                key={game}
-                label={game}
-                disabled={disabled}
-                onPress={() => setSelectedGame(game)}
-              />
-            ))}
-            <ActionButton
-              label={C.moreGames}
-              disabled={disabled}
-              onPress={() => onSend(more.text, more.label)}
-            />
-          </View>
-        ) : (
-          <View className="flex-row flex-wrap">
-            <ActionButton
-              label={selected}
-              disabled={disabled}
-              onPress={() => setSelectedGame(null)}
-            />
-            <ActionButton
-              label={C.overview}
-              disabled={disabled}
-              onPress={() => {
-                const prompt = quickOverviewPrompt(selected);
-                onSend(prompt.text, prompt.label);
-              }}
-            />
-            <ActionButton
-              label={C.setup}
-              disabled={disabled}
-              onPress={() => {
-                const playerCount = playerCountFromMessages(messages);
-                const params: Record<string, string> = {
-                  reason: 'setup',
-                  gameName: selected,
-                };
-                const ownedGame = findOwnedGame(games, selected);
-                if (ownedGame) params.gameId = ownedGame.id;
-                if (playerCount !== undefined) params.playerCount = playerCount;
-                router.push({ pathname: Routes.intent, params });
-              }}
-            />
-            <ActionButton
-              label={C.moreInfo}
-              disabled={disabled}
-              onPress={() => {
-                const prompt = moreInfoPrompt(selected);
-                onSend(prompt.text, prompt.label);
-              }}
-            />
-            <ActionButton
-              label={C.compare(gamesNamed.length)}
-              disabled={disabled}
-              onPress={() => {
-                const prompt = comparePrompt(selected, gamesNamed.length);
-                onSend(prompt.text, prompt.label);
-              }}
-            />
-          </View>
-        )}
-      </View>
-    );
-  }
 
   if (thread.reason !== 'setup' && thread.reason !== 'rules') return null;
 

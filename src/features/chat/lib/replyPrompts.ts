@@ -25,12 +25,41 @@ const RULES_TOPIC_QUESTIONS: Record<string, string> = {
 };
 
 export function moreGamesPrompt(excluded: string[]): HiddenPrompt {
+  return moreTipsPrompt(excluded);
+}
+
+export function moreTipsPrompt(excluded: string[]): HiddenPrompt {
   const list = excluded.map((name) => name.trim()).filter((name) => name.length > 0);
   const avoid =
     list.length > 0 ? ` Do not suggest any of these games again: ${list.join(', ')}.` : '';
   return {
-    label: 'I want more games',
-    text: `Suggest more board games that fit my original criteria.${avoid} Every title must be new. Put only those new titles in suggestedGames. Do not repeat my request.`,
+    label: 'More tips like this',
+    text: `Suggest exactly 5 more board games that fit my original criteria.${avoid} Every title must be new. Put only those 5 titles in suggestedGames. Start each bullet with the game title. Do not repeat my request.`,
+  };
+}
+
+export function tipDetailsPrompt(game: string): HiddenPrompt {
+  return {
+    label: `More about ${game}`,
+    text: `Tell me more about ${game}: who it is for, how a turn feels, and what makes it different from games like it. A short paragraph is enough. Do not recommend other games. Return an empty suggestedGames array.`,
+  };
+}
+
+export function similarGamesPrompt(game: string, excluded: string[]): HiddenPrompt {
+  const blocked = [game, ...excluded].map((name) => name.trim()).filter((name) => name.length > 0);
+  return {
+    label: `Similar to ${game}`,
+    text: `Suggest exactly 5 board games similar to ${game}: close in theme, complexity, and length. Do not suggest any of these: ${blocked.join(', ')}. Put only the 5 new titles in suggestedGames. Start each bullet with the game title. Do not repeat my request.`,
+  };
+}
+
+export function easiestSetupPrompt(games: string[], metadata: string[]): HiddenPrompt {
+  const names = games.map((name) => name.trim()).filter((name) => name.length > 0);
+  const stored =
+    metadata.length > 0 ? ` Metadata already stored for these games:\n${metadata.join('\n')}` : '';
+  return {
+    label: 'Easiest setup',
+    text: `Of these recommended games — ${names.join(', ')} — rank them from easiest setup to hardest setup.${stored} Use weight, play time, player count, and mechanics as clues for how long the table takes to set up. List every one of these games and no others. Put them in suggestedGames in that easiest-first order. One bullet per game, starting with the title, on why its setup is easier or harder. Do not repeat my request.`,
   };
 }
 
@@ -102,13 +131,51 @@ export function setupDepthPrompt(
   if (depth === 'basic') {
     return {
       label: '15 minute setup',
-      text: `Quick setup guide for ${game}.${table} Walk me through the core rules so we understand the basics (15 minutes). Stay on setup, the first turns, and how a turn works. Return an empty suggestedGames array.`,
+      text: `Quick setup guide for ${game}.${table} Walk me through the core rules so we understand the basics (15 minutes). Return an empty suggestedGames array.`,
     };
   }
   return {
     label: 'Full rules walkthrough',
     text: `Quick setup guide for ${game}.${table} Give me a complete rules walkthrough. Return an empty suggestedGames array.`,
   };
+}
+
+/**
+ * Extra instructions for the model only. The stored prompt stays the short
+ * depth sentence the player saw on the form.
+ */
+export function setupDepthNote(depth: 'quick' | 'basic' | 'full'): string {
+  if (depth === 'quick') {
+    return [
+      'Answer at the 5-minute level.',
+      'Give the bare minimum to start the first turn: the essential mechanics, and the minimum table setup.',
+      'Use the base configuration only. Include pieces that must be there every game.',
+      'Leave out optional expansions and modules that can be added or removed, and name what you left out in one short line.',
+      'Skip scoring edge cases, rare exceptions, and variant setups.',
+    ].join(' ');
+  }
+  if (depth === 'basic') {
+    return [
+      'Answer at the 15-minute core-rules level.',
+      'First, the table: where each component goes, and which figures, characters, and resources each player takes.',
+      'Then the basics of play: the core rules, the main mechanics, and how scoring works.',
+      'Skip rare exceptions and optional modules.',
+    ].join(' ');
+  }
+  return [
+    'Answer with a complete rules walkthrough. This is the long form.',
+    'Write separate sections. Start each section with a markdown heading on its own line, exactly like ## Table setup.',
+    'Under each heading write one short paragraph, then bullet points for the concrete steps, pieces, or a short example.',
+    'Cover what fits this game, in this order when it applies:',
+    'what must be on the table every game, and which cards, modules, or expansions are chosen to change the experience;',
+    'components and resources, where each one goes, and what it is commonly used for;',
+    'the turn or phase flow, including how players interact in between with attacks, reactions, or similar;',
+    'each major action as its own section, with one short example (for a deck-builder, keep action cards separate from buys);',
+    'scoring cards and the conditions for scoring;',
+    'how different sets, modules, or expansions change the pace and the feel of the game.',
+    'Use only the headings this game needs. Keep each section concise. Do not merge the sections into one paragraph.',
+    'Return an empty suggestedGames array.',
+  ].join(' ');
 }
 
 export function differentStrategiesPrompt(game: string, existing: readonly string[]): HiddenPrompt {
